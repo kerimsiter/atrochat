@@ -135,10 +135,28 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDelete, onEdit
   };
 
   if (isSystem) {
+    const sysContent = message.content || '';
+    const looksLikeRich = sysContent.includes('\n') || /[#`*\-]{1,}/.test(sysContent);
+    const isShortNote = !looksLikeRich && sysContent.length <= 160;
+
+    if (isShortNote) {
+      return (
+        <div className="text-center my-4">
+          <div className="inline-block bg-surface text-secondary text-xs px-3 py-1 rounded-full">
+            {sysContent}
+          </div>
+        </div>
+      );
+    }
+
+    // Rich/uzun sistem mesajları: Markdown olarak kart görünümünde göster
     return (
-      <div className="text-center my-4">
-        <div className="inline-block bg-surface text-secondary text-xs px-3 py-1 rounded-full">
-          {message.content}
+      <div className="my-4 flex justify-center">
+        <div className="w-full max-w-3xl rounded-lg border border-glass bg-surface-light px-4 py-3">
+          <div className="text-[10px] uppercase tracking-wider text-secondary mb-2">Sistem</div>
+          <div className="text-sm leading-relaxed">
+            <MarkdownRenderer content={sysContent} />
+          </div>
         </div>
       </div>
     );

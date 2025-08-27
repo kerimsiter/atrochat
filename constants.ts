@@ -25,7 +25,7 @@ export const COST_PER_MILLION_TOKENS = {
 
 // Default system instruction for the assistant behavior
 // Threshold to suggest summarizing long chats (soft UI threshold)
-export const SUMMARY_THRESHOLD = 100000; // tokens
+export const SUMMARY_THRESHOLD = 500000; // tokens
 
 // Default system instruction for the assistant behavior
 export const DEFAULT_SYSTEM_INSTRUCTION = `
