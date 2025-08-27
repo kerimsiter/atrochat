@@ -10,6 +10,9 @@ let currentStream: AsyncIterable<any> | null = null;
 let currentAbort: AbortController | null = null;
 let currentModelMessageId: string | null = null;
 
+// Build-time injected by Vite define in vite.config.ts
+const BUILD_TIME_GEMINI_API_KEY: string | undefined = (process as any)?.env?.GEMINI_API_KEY;
+
 // Types
 interface ChatState {
   sessions: ChatSession[];
@@ -75,7 +78,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   isSyncing: false,
   isGeneratingInstruction: false,
   isSummarizing: false,
-  geminiApiKey: localStorage.getItem('geminiApiKey') || '',
+  // Prefer localStorage; fallback to build-time env injected via Vite define
+  geminiApiKey: localStorage.getItem('geminiApiKey')
+    || ((process as any)?.env?.GEMINI_API_KEY || ''),
   githubToken: localStorage.getItem('githubToken') || localStorage.getItem('githubPat') || '',
   selectedModel: localStorage.getItem('selectedModel') || localStorage.getItem('selectedGeminiModel') || undefined,
   systemInstruction: localStorage.getItem('systemInstruction') || DEFAULT_SYSTEM_INSTRUCTION,
@@ -92,7 +97,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           set({
             sessions: parsed,
             activeSessionId: localStorage.getItem('activeSessionId') || parsed[0].id,
-            geminiApiKey: localStorage.getItem('geminiApiKey') || get().geminiApiKey,
+            geminiApiKey:
+              localStorage.getItem('geminiApiKey')
+              || get().geminiApiKey
+              || ((process as any)?.env?.GEMINI_API_KEY || ''),
             githubToken: localStorage.getItem('githubToken') || localStorage.getItem('githubPat') || get().githubToken,
             selectedModel: localStorage.getItem('selectedModel') || localStorage.getItem('selectedGeminiModel') || get().selectedModel,
             systemInstruction: localStorage.getItem('systemInstruction') || get().systemInstruction,

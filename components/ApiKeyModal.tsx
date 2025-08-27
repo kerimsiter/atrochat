@@ -40,7 +40,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   return (
     <div className="fixed inset-0 bg-obsidian/70 flex items-center justify-center z-50" onClick={onClose}>
       <div className="glass-surface rounded-lg shadow-xl p-5 w-full max-w-md border border-glass" onClick={e => e.stopPropagation()}>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
+          {/* Dummy fields to defeat browser autofill */}
+          <input type="text" name="fake-username" autoComplete="username" className="hidden" tabIndex={-1} aria-hidden="true" />
+          <input type="password" name="fake-password" autoComplete="new-password" className="hidden" tabIndex={-1} aria-hidden="true" />
           {/* Gemini API Key Section (compact) */}
           <div className="space-y-2">
             <div className="flex items-center gap-2">
@@ -51,10 +54,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
             <input
               id="gemini_api_key"
               type="password"
+              name="gemini_api_key"
               value={geminiApiKey}
               onChange={(e) => setGeminiApiKey(e.target.value)}
               placeholder="Gemini API Key"
               className="w-full bg-surface-light text-primary rounded-md px-3 py-2 focus:ring-2 focus:ring-accent-dark focus:outline-none transition placeholder-secondary/70 border border-glass text-sm"
+              autoComplete="off"
+              spellCheck={false}
+              inputMode="text"
+              autoCorrect="off"
               aria-label="Gemini API Anahtarı"
               required
             />
