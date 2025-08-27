@@ -3,36 +3,20 @@ import React, { useState, useRef, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import MessageBubble from './components/MessageBubble';
 import ChatInput, { ChatInputRef } from './components/ChatInput';
-import { useChatManager } from './hooks/useChatManager';
 import { fetchRepoContents } from './services/githubService';
 import { FileContent } from './types';
 import { SettingsIcon, BotIcon, GitHubIcon, SyncIcon, MenuIcon } from './components/icons';
 import SettingsModal from './components/ApiKeyModal';
 import GitHubRepoModal from './components/GitHubRepoModal';
 import TokenUsageDisplay from './components/TokenUsageDisplay';
-import { GEMINI_MODELS, DEFAULT_GEMINI_MODEL } from './constants';
+import { GEMINI_MODELS } from './constants';
+import { useChatStore } from './store/chatStore';
 
 const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [geminiApiKey, setGeminiApiKey] = useState<string | null>(() => localStorage.getItem('geminiApiKey'));
-  const [githubToken, setGithubToken] = useState<string | null>(() => localStorage.getItem('githubPat'));
-  const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
-  const [showGitHubModal, setShowGitHubModal] = useState<boolean>(false);
-  const [isRepoLoading, setIsRepoLoading] = useState<boolean>(false);
-  const [selectedModel, setSelectedModel] = useState<string>(() => {
-    return localStorage.getItem('selectedGeminiModel') || DEFAULT_GEMINI_MODEL;
-  });
-
-  useEffect(() => {
-    if (!geminiApiKey) {
-      setShowSettingsModal(true);
-    }
-  }, [geminiApiKey]);
-
-
-  const {
+  const { 
     sessions,
-    activeSession,
+    activeSessionId,
     isLoading,
     isSyncing,
     isHydrating,
@@ -45,7 +29,26 @@ const App: React.FC = () => {
     syncRepo,
     deleteMessage,
     editMessage,
-  } = useChatManager(geminiApiKey, githubToken, selectedModel);
+    geminiApiKey,
+    githubToken,
+    selectedModel,
+    setSelectedModel,
+    hydrate,
+  } = useChatStore();
+  const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
+  const [showGitHubModal, setShowGitHubModal] = useState<boolean>(false);
+  const [isRepoLoading, setIsRepoLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    hydrate();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!geminiApiKey) setShowSettingsModal(true);
+  }, [geminiApiKey]);
+
+  const activeSession = sessions.find(s => s.id === activeSessionId) || null;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<ChatInputRef>(null);
@@ -54,18 +57,9 @@ const App: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeSession?.messages, isLoading]);
   
-  const handleSaveSettings = (keys: { gemini: string; github: string }) => {
-    localStorage.setItem('geminiApiKey', keys.gemini);
-    setGeminiApiKey(keys.gemini);
-    localStorage.setItem('githubPat', keys.github);
-    setGithubToken(keys.github);
-    setShowSettingsModal(false);
-  };
-
   const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newModel = e.target.value;
     setSelectedModel(newModel);
-    localStorage.setItem('selectedGeminiModel', newModel);
   };
   
   const handleFileSelect = (filePath: string) => {
@@ -117,7 +111,7 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen font-sans">
-      {showSettingsModal && <SettingsModal onSave={handleSaveSettings} onClose={() => setShowSettingsModal(false)} currentGeminiApiKey={geminiApiKey} currentGitHubToken={githubToken} />}
+      {showSettingsModal && <SettingsModal onClose={() => setShowSettingsModal(false)} />}
       {showGitHubModal && <GitHubRepoModal onLoad={handleLoadRepo} onClose={() => setShowGitHubModal(false)} isLoading={isRepoLoading} />}
       <Sidebar
         isOpen={isSidebarOpen}

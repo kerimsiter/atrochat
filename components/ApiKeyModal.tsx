@@ -1,30 +1,26 @@
 
 import React, { useEffect, useState } from 'react';
 import { KeyIcon, GitHubIcon, BotIcon } from './icons';
+import { useChatStore } from '../store/chatStore';
 
 interface SettingsModalProps {
-  onSave: (keys: { gemini: string; github: string }) => void;
   onClose: () => void;
-  currentGeminiApiKey: string | null;
-  currentGitHubToken: string | null;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onClose, currentGeminiApiKey, currentGitHubToken }) => {
-  const [geminiApiKey, setGeminiApiKey] = useState(currentGeminiApiKey || '');
-  const [githubToken, setGithubToken] = useState(currentGitHubToken || '');
-  const [systemInstruction, setSystemInstruction] = useState('');
+const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
+  const { geminiApiKey: storedGeminiKey, githubToken: storedGithubToken, systemInstruction: storedInstruction, setApiKeys, setSystemInstruction } = useChatStore();
+  const [geminiApiKey, setGeminiApiKey] = useState(storedGeminiKey || '');
+  const [githubToken, setGithubToken] = useState(storedGithubToken || '');
+  const [systemInstruction, setSystemInstructionLocal] = useState(storedInstruction || '');
 
   useEffect(() => {
-    const savedInstruction = localStorage.getItem('systemInstruction') || '';
-    setSystemInstruction(savedInstruction);
-  }, []);
+    setSystemInstructionLocal(storedInstruction || '');
+  }, [storedInstruction]);
 
   const handleSave = () => {
-    localStorage.setItem('systemInstruction', systemInstruction.trim());
-    onSave({
-      gemini: geminiApiKey.trim(),
-      github: githubToken.trim(),
-    });
+    setApiKeys({ gemini: geminiApiKey.trim(), github: githubToken.trim() });
+    setSystemInstruction(systemInstruction.trim());
+    onClose();
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -65,7 +61,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onSave, onClose, currentG
             <textarea
               id="system_instruction"
               value={systemInstruction}
-              onChange={(e) => setSystemInstruction(e.target.value)}
+              onChange={(e) => setSystemInstructionLocal(e.target.value)}
               placeholder="Sistem talimatı (opsiyonel)"
               className="w-full bg-surface-light text-primary rounded-md px-3 py-2 h-20 resize-y focus:ring-2 focus:ring-accent-dark focus:outline-none transition placeholder-secondary/70 border border-glass text-sm"
               aria-label="Sistem Talimatı"

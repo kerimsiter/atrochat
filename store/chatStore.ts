@@ -66,8 +66,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   isHydrating: true,
   isSyncing: false,
   geminiApiKey: localStorage.getItem('geminiApiKey') || '',
-  githubToken: localStorage.getItem('githubToken') || '',
-  selectedModel: localStorage.getItem('selectedModel') || undefined,
+  githubToken: localStorage.getItem('githubToken') || localStorage.getItem('githubPat') || '',
+  selectedModel: localStorage.getItem('selectedModel') || localStorage.getItem('selectedGeminiModel') || undefined,
   systemInstruction: localStorage.getItem('systemInstruction') || DEFAULT_SYSTEM_INSTRUCTION,
 
   // Actions
@@ -81,8 +81,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             sessions: parsed,
             activeSessionId: localStorage.getItem('activeSessionId') || parsed[0].id,
             geminiApiKey: localStorage.getItem('geminiApiKey') || get().geminiApiKey,
-            githubToken: localStorage.getItem('githubToken') || get().githubToken,
-            selectedModel: localStorage.getItem('selectedModel') || get().selectedModel,
+            githubToken: localStorage.getItem('githubToken') || localStorage.getItem('githubPat') || get().githubToken,
+            selectedModel: localStorage.getItem('selectedModel') || localStorage.getItem('selectedGeminiModel') || get().selectedModel,
             systemInstruction: localStorage.getItem('systemInstruction') || get().systemInstruction,
           });
         } else {
