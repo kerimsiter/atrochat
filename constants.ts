@@ -1,3 +1,5 @@
+export const GEMINI_MODEL = 'gemini-2.5-pro';
+
 // Available Gemini models for selection in UI
 export const GEMINI_MODELS: Record<string, string> = {
   'Gemini 2.5 Pro': 'gemini-2.5-pro',
