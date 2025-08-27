@@ -25,7 +25,8 @@ export const getGeminiChatStream = async (
   history: Content[],
   newParts: Part[],
   useGoogleSearch: boolean,
-  useUrlContext: boolean
+  useUrlContext: boolean,
+  model?: string
 ): Promise<AsyncGenerator<GenerateContentResponse, any, unknown>> => {
   try {
     const ai = getAiClient(apiKey);
@@ -49,7 +50,7 @@ export const getGeminiChatStream = async (
     }
 
     const response = await ai.models.generateContentStream({
-      model: GEMINI_MODEL,
+      model: model || GEMINI_MODEL,
       contents: [...history, { role: Role.USER, parts: newParts }],
       config: config,
     });

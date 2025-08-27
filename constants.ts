@@ -1,5 +1,14 @@
 export const GEMINI_MODEL = 'gemini-2.5-pro';
 
+// Available Gemini models for selection in UI
+export const GEMINI_MODELS: Record<string, string> = {
+  'Gemini 2.5 Pro': 'gemini-2.5-pro',
+  'Gemini 2.5 Flash': 'gemini-2.5-flash',
+};
+
+// Default model used when no explicit selection is provided
+export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-pro';
+
 // Heuristic for token estimation: 1 token ~= 4 characters
 export const TOKEN_ESTIMATE_FACTOR = 4;
 

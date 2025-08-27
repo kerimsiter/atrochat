@@ -24,7 +24,7 @@ const createInitialSession = (): ChatSession => ({
   isContextStale: false,
 });
 
-export const useChatManager = (geminiApiKey: string | null, githubToken: string | null) => {
+export const useChatManager = (geminiApiKey: string | null, githubToken: string | null, selectedModel?: string) => {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -385,30 +385,47 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
     let urlContextMetadata: UrlContextMetadata | undefined = undefined;
     
     try {
-      const stream = await getGeminiChatStream(geminiApiKey, history, finalPartsForApi, useGoogleSearch, useUrlAnalysis);
+      const stream = await getGeminiChatStream(
+        geminiApiKey,
+        history,
+        finalPartsForApi,
+        useGoogleSearch,
+        useUrlAnalysis,
+        selectedModel
+      );
       
       for await (const chunk of stream) {
         let chunkAnswer = '';
 
-        for (const part of chunk.candidates[0].content.parts) {
-            if ((part as any).thought && part.text) {
-                accumulatedThoughts += part.text;
-            } else if (part.text) {
-                chunkAnswer += part.text;
+        const candidate = chunk?.candidates?.[0];
+        if (!candidate) continue;
+
+        const parts = (candidate as any)?.content?.parts;
+        if (Array.isArray(parts)) {
+          for (const p of parts) {
+            const part: any = p as any;
+            if (part?.thought && typeof part.text === 'string') {
+              accumulatedThoughts += part.text;
+            } else if (typeof part?.text === 'string') {
+              chunkAnswer += part.text;
+            } else if (part?.functionCall || part?.toolCall || part?.executable || part?.inlineData || part?.fileData) {
+              const name = part?.functionCall?.name || part?.toolCall?.name || part?.executable?.name || 'bir araç';
+              accumulatedThoughts += `\n[${name}] kullanılıyor...`;
             }
+          }
         }
         
         modelResponse += chunkAnswer;
 
-        if (chunk.candidates?.[0]?.groundingMetadata) {
+        if (candidate?.groundingMetadata) {
             groundingMetadata = {
                 ...(groundingMetadata || {}),
-                ...chunk.candidates[0].groundingMetadata
+                ...candidate.groundingMetadata
             };
         }
 
-        if (chunk.candidates?.[0]?.urlContextMetadata) {
-            urlContextMetadata = chunk.candidates[0].urlContextMetadata as UrlContextMetadata;
+        if ((candidate as any)?.urlContextMetadata) {
+            urlContextMetadata = (candidate as any).urlContextMetadata as UrlContextMetadata;
         }
 
         updateSession(activeSessionId, s => {
@@ -417,7 +434,8 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
 
             const updatedThinkingSteps = accumulatedThoughts
                 .split('\n')
-                .filter(step => step.trim() !== '');
+                .map(step => step.trim())
+                .filter(step => step !== '');
 
             return {
                 ...s,

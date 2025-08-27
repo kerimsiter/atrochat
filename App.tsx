@@ -10,6 +10,7 @@ import { SettingsIcon, BotIcon, GitHubIcon, SyncIcon, MenuIcon } from './compone
 import SettingsModal from './components/ApiKeyModal';
 import GitHubRepoModal from './components/GitHubRepoModal';
 import TokenUsageDisplay from './components/TokenUsageDisplay';
+import { GEMINI_MODELS, DEFAULT_GEMINI_MODEL } from './constants';
 
 const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -18,6 +19,9 @@ const App: React.FC = () => {
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
   const [showGitHubModal, setShowGitHubModal] = useState<boolean>(false);
   const [isRepoLoading, setIsRepoLoading] = useState<boolean>(false);
+  const [selectedModel, setSelectedModel] = useState<string>(() => {
+    return localStorage.getItem('selectedGeminiModel') || DEFAULT_GEMINI_MODEL;
+  });
 
   useEffect(() => {
     if (!geminiApiKey) {
@@ -39,7 +43,7 @@ const App: React.FC = () => {
     syncRepo,
     deleteMessage,
     editMessage,
-  } = useChatManager(geminiApiKey, githubToken);
+  } = useChatManager(geminiApiKey, githubToken, selectedModel);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<ChatInputRef>(null);
@@ -54,6 +58,12 @@ const App: React.FC = () => {
     localStorage.setItem('githubPat', keys.github);
     setGithubToken(keys.github);
     setShowSettingsModal(false);
+  };
+
+  const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newModel = e.target.value;
+    setSelectedModel(newModel);
+    localStorage.setItem('selectedGeminiModel', newModel);
   };
   
   const handleFileSelect = (filePath: string) => {
@@ -142,6 +152,19 @@ const App: React.FC = () => {
                     </div>
                 </div>
                 <div className="flex items-center gap-4 flex-shrink-0">
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="model-select" className="text-xs text-secondary">Model:</label>
+                    <select
+                      id="model-select"
+                      value={selectedModel}
+                      onChange={handleModelChange}
+                      className="text-sm bg-surface-light text-primary border border-glass rounded px-2 py-1"
+                   >
+                      {Object.entries(GEMINI_MODELS).map(([label, value]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                  </div>
                   {!activeSession.projectRepoUrl && (
                     <button
                         onClick={() => setShowGitHubModal(true)}
