@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { FolderIcon, FileIcon, ChevronRightIcon } from './icons';
+import { FolderIcon, FileIcon, ChevronRightIcon, EyeIcon, AtSymbolIcon } from './icons';
 
 interface FileTreeProps {
   paths: string[];
@@ -39,16 +39,25 @@ const TreeNodeComponent: React.FC<{ node: TreeNode; onFileSelect: (path: string)
   const [isOpen, setIsOpen] = useState(false);
   const isFolder = !!node.children;
 
-  const handleClick = () => {
-    if (isFolder) {
-      // Klasör satırına tıklama: referans ekle (sonunda '/') ve aç/kapa
-      onFileSelect(`${node.path}/`);
-      setIsOpen(!isOpen);
-    } else {
-      // Dosya satırı: referans ekle + görüntüleyici aç
-      onFileSelect(node.path);
-      onFileView?.(node.path);
-    }
+  // Satıra tıklama sadece klasör aç/kapa yapar
+  const handleRowClick = () => {
+    if (isFolder) setIsOpen(!isOpen);
+  };
+
+  const handleToggleChevron = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isFolder) setIsOpen(!isOpen);
+  };
+
+  const handleAddReference = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const refPath = isFolder ? `${node.path}/` : node.path;
+    onFileSelect(refPath);
+  };
+
+  const handleViewFile = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isFolder) onFileView?.(node.path);
   };
 
   const sortedChildren = isFolder ? Object.values(node.children!).sort((a, b) => {
@@ -61,17 +70,32 @@ const TreeNodeComponent: React.FC<{ node: TreeNode; onFileSelect: (path: string)
   return (
     <div>
       <div
-        onClick={handleClick}
-        className="flex items-center p-1 rounded-md hover:bg-surface-light cursor-pointer text-sm"
+        onClick={handleRowClick}
+        className="group flex items-center justify-between p-1 rounded-md hover:bg-surface-light cursor-pointer text-sm"
         style={{ paddingLeft: `${level * 16}px` }}
       >
-        {isFolder && (
-          <span onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}>
-            <ChevronRightIcon className={`w-4 h-4 mr-1 text-secondary/70 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
-          </span>
-        )}
-        {isFolder ? <FolderIcon className="w-4 h-4 mr-2 text-cyan-400" /> : <FileIcon className="w-4 h-4 mr-2 text-secondary" />}
-        <span className="truncate text-secondary">{node.name}</span>
+        <div className="flex items-center min-w-0">
+          {isFolder ? (
+            <span onClick={handleToggleChevron}>
+              <ChevronRightIcon className={`w-4 h-4 mr-1 text-secondary/70 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+            </span>
+          ) : (
+            <span className="w-4 h-4 mr-1 opacity-0" />
+          )}
+          {isFolder ? <FolderIcon className="w-4 h-4 mr-2 text-cyan-400" /> : <FileIcon className="w-4 h-4 mr-2 text-secondary" />}
+          <span className="truncate text-secondary" title={node.path}>{node.name}</span>
+        </div>
+
+        <div className="flex items-center flex-shrink-0 gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {!isFolder && (
+            <button onClick={handleViewFile} className="p-1 text-secondary hover:text-primary" aria-label="Dosyayı Görüntüle">
+              <EyeIcon className="w-4 h-4" />
+            </button>
+          )}
+          <button onClick={handleAddReference} className="p-1 text-secondary hover:text-primary" aria-label="Referans Ekle">
+            <AtSymbolIcon className="w-4 h-4" />
+          </button>
+        </div>
       </div>
       {isFolder && isOpen && (
         <div>
