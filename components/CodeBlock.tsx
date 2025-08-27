@@ -48,7 +48,11 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, content }) => {
   return (
     <div className="bg-obsidian rounded-lg my-4 border border-glass relative group text-sm">
       <div className="flex justify-between items-center px-4 py-2 bg-surface/50 rounded-t-md">
-        <span className="text-xs font-sans text-secondary select-none">{lang}</span>
+        {lang && lang !== 'plaintext' ? (
+          <span className="text-xs font-sans text-secondary select-none">{lang}</span>
+        ) : (
+          <span className="text-xs font-sans text-secondary select-none" aria-hidden="true"></span>
+        )}
         <button
           onClick={handleCopy}
           className="flex items-center gap-1.5 text-xs text-secondary hover:text-primary transition-colors"

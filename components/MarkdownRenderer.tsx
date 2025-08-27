@@ -32,8 +32,12 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
         components={{
           code({ inline, className, children, ...props }: any) {
             const match = /language-([\w-]+)/.exec(className || '');
-            const raw = match ? match[1] : '';
-            const lang = normalizeLang(raw);
+            let lang = normalizeLang(match ? match[1] : '');
+            const rawText = String(children);
+            const text = rawText.endsWith('\n') ? rawText.slice(0, -1) : rawText;
+            const isSingleShortLine = !text.includes('\n') && text.trim().length <= 80;
+            const looksLikeCommand = /^(?:\$\s*)?(npm|pnpm|yarn|npx|git|cd|mkdir|rm|cp|mv|node|ts-node|python|pip|pip3)\b/.test(text.trim());
+
             if (inline) {
               return (
                 <code className="bg-surface-light text-accent px-1.5 py-0.5 rounded text-sm font-mono" {...props}>
@@ -41,8 +45,26 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
                 </code>
               );
             }
+
+            // Heuristic: single short line without language -> render compact block instead of full CodeBlock header UI
+            if ((!lang || lang === 'plaintext') && isSingleShortLine) {
+              if (looksLikeCommand) lang = 'bash';
+              return (
+                <div className="my-3">
+                  <code className="bg-obsidian border border-glass rounded px-3 py-2 block text-sm font-mono whitespace-pre-wrap break-words">
+                    {text}
+                  </code>
+                </div>
+              );
+            }
+
+            // Prefer bash for common command snippets when no explicit language
+            if ((!lang || lang === 'plaintext') && looksLikeCommand) {
+              lang = 'bash';
+            }
+
             return (
-              <CodeBlock language={lang} content={String(children)} />
+              <CodeBlock language={lang} content={text} />
             );
           },
           table({ children }) {
