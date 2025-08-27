@@ -38,12 +38,11 @@ const TreeNodeComponent: React.FC<{ node: TreeNode; onFileSelect: (path: string)
   const [isOpen, setIsOpen] = useState(false);
   const isFolder = !!node.children;
 
-  const handleToggle = () => {
-    if (isFolder) {
-      setIsOpen(!isOpen);
-    } else {
-      onFileSelect(node.path);
-    }
+  const handleClick = () => {
+    // Satır tıklanınca: yolu referans olarak ekle, klasörse '/' ile gönder ve ayrıca aç/kapa
+    const refPath = isFolder ? `${node.path}/` : node.path;
+    onFileSelect(refPath);
+    if (isFolder) setIsOpen(!isOpen);
   };
 
   const sortedChildren = isFolder ? Object.values(node.children!).sort((a, b) => {
@@ -56,12 +55,14 @@ const TreeNodeComponent: React.FC<{ node: TreeNode; onFileSelect: (path: string)
   return (
     <div>
       <div
-        onClick={handleToggle}
+        onClick={handleClick}
         className="flex items-center p-1 rounded-md hover:bg-surface-light cursor-pointer text-sm"
         style={{ paddingLeft: `${level * 16}px` }}
       >
         {isFolder && (
-          <ChevronRightIcon className={`w-4 h-4 mr-1 text-secondary/70 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+          <span onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}>
+            <ChevronRightIcon className={`w-4 h-4 mr-1 text-secondary/70 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+          </span>
         )}
         {isFolder ? <FolderIcon className="w-4 h-4 mr-2 text-cyan-400" /> : <FileIcon className="w-4 h-4 mr-2 text-secondary" />}
         <span className="truncate text-secondary">{node.name}</span>

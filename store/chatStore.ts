@@ -191,13 +191,38 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     set({ isLoading: true });
 
     let apiMessageContent = messageContent;
-    const isSendingFullContext = currentSession.isContextStale && (currentSession.projectFiles || []).length > 0;
     const pendingUpdate = (currentSession as any).pendingContextUpdate;
     const projectFiles = currentSession.projectFiles || [];
+    const isSendingFullContext = currentSession.isContextStale && projectFiles.length > 0;
 
-    if (isSendingFullContext) {
+    // 1) Öncelik: Kullanıcının açık referansları (@dosya veya @klasör/)
+    const refRegex = /@([A-Za-z0-9_\/.\-]+\/?)/g;
+    const matches = [...messageContent.matchAll(refRegex)].map(m => m[1]);
+    if (matches.length > 0 && projectFiles.length > 0) {
+      const uniqueRefs = Array.from(new Set(matches));
+      const selectedFiles: FileContent[] = [];
+      for (const ref of uniqueRefs) {
+        const isFolder = ref.endsWith('/');
+        const normalized = ref.replace(/^\/?/, ''); // baştaki / kaldır
+        for (const f of projectFiles) {
+          if ((isFolder && f.path.startsWith(normalized)) || (!isFolder && f.path === normalized)) {
+            if (!selectedFiles.find(sf => sf.path === f.path)) selectedFiles.push(f);
+          }
+        }
+      }
+      if (selectedFiles.length > 0) {
+        const contextPreamble = `Aşağıdaki dosya/klasör referanslarını dikkate alarak yanıt ver:\n\n${selectedFiles
+          .map(f => `--- DOSYA: ${f.path} ---\n\`\`\`\n${f.content}\n\`\`\``)
+          .join('\n\n')}\n\n--- SORU ---\n`;
+        const stripped = messageContent.replace(refRegex, '').replace(/\s+/g, ' ').trim();
+        apiMessageContent = contextPreamble + (stripped.length > 0 ? stripped : 'Yukarıdaki bağlama göre devam et.');
+      }
+    }
+
+    // 2) Referans yoksa ve bağlam bayrağı açıksa tüm proje bağlamını ekle
+    if (apiMessageContent === messageContent && isSendingFullContext) {
       apiMessageContent = `Aşağıdaki proje dosyalarını analiz et. Bu dosyalardaki bilgilere dayanarak yanıt ver:\n\n${projectFiles.map(f => `--- DOSYA: ${f.path} ---\n\`\`\`\n${f.content}\n\`\`\``).join('\n\n')}\n\n--- SORU ---\n${messageContent}`;
-    } else if (pendingUpdate) {
+    } else if (apiMessageContent === messageContent && pendingUpdate) {
       let preamble = 'PROJE BAĞLAMI GÜNCELLEMESİ:\nMevcut proje bilgine ek olarak aşağıdaki değişiklikleri dikkate al.\n\n';
       if (pendingUpdate.added.length > 0) preamble += `- EKLENEN DOSYALAR: ${pendingUpdate.added.map((f: any) => f.path).join(', ')}\n`;
       if (pendingUpdate.modified.length > 0) preamble += `- DEĞİŞTİRİLEN DOSYALAR: ${pendingUpdate.modified.map((f: any) => f.path).join(', ')}\n`;
