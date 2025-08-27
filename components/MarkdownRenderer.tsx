@@ -33,15 +33,16 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
           code({ inline, className, children, ...props }: any) {
             const match = /language-([\w-]+)/.exec(className || '');
             let lang = normalizeLang(match ? match[1] : '');
-            const rawText = String(children);
+            const rawText = Array.isArray(children) ? children.join('') : String(children);
             const text = rawText.endsWith('\n') ? rawText.slice(0, -1) : rawText;
             const isSingleLine = !text.includes('\n');
             const looksLikeCommand = /^(?:\$\s*)?(npm|pnpm|yarn|npx|git|cd|mkdir|rm|cp|mv|node|ts-node|python|pip|pip3)\b/.test(text.trim());
 
-            if (inline) {
+            // Robust inline detection: respect inline prop OR absence of newline
+            if (inline || !rawText.includes('\n')) {
               return (
                 <code className="bg-surface-light text-accent px-1.5 py-0.5 rounded text-sm font-mono" {...props}>
-                  {children}
+                  {text}
                 </code>
               );
             }
