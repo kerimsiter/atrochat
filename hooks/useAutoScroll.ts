@@ -12,6 +12,12 @@ export const useAutoScroll = <T,>(dependency: T, options: Options = {}) => {
   const [isUserScrolling, setIsUserScrolling] = useState(false);
   const lastScrollTop = useRef(0);
   const rafRef = useRef<number | null>(null);
+  const isStreamingRef = useRef(false);
+
+  // streaming durumunu ref'te tut, effect'leri tetikleme
+  useEffect(() => {
+    isStreamingRef.current = streaming;
+  }, [streaming]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -36,30 +42,48 @@ export const useAutoScroll = <T,>(dependency: T, options: Options = {}) => {
     return () => container.removeEventListener('scroll', handleScroll);
   }, [threshold]);
 
-  // Mesajlar değiştiğinde otomatik kaydır (kullanıcı yukarıda değilse)
+  // Mesaj sayısı değiştiğinde (dependency) ve streaming değilken dibe çek
   useEffect(() => {
     if (isUserScrolling) return;
+    if (isStreamingRef.current) return;
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    // Zaten dibe yakın değilsek zorla kaydırma (özellikle streaming sırasında zıplamaya yol açar)
     const { scrollTop, scrollHeight, clientHeight } = container;
     const distanceToBottom = scrollHeight - scrollTop - clientHeight;
     if (distanceToBottom > threshold) return;
 
-    // Aynı frame içinde birden fazla kaydırmayı engelle
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(() => {
-      container.scrollTo({
-        top: container.scrollHeight,
-        behavior: 'auto',
-      });
+      container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
     });
 
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [dependency, isUserScrolling, streaming]);
+  }, [dependency, isUserScrolling, threshold]);
+
+  // Streaming sırasında rAF ile akışı takip et (kullanıcı dibe yakınsa)
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    if (!streaming) return;
+    if (isUserScrolling) return;
+
+    let stopped = false;
+    const follow = () => {
+      if (stopped) return;
+      if (isStreamingRef.current && !isUserScrolling) {
+        container.scrollTop = container.scrollHeight;
+        rafRef.current = requestAnimationFrame(follow);
+      }
+    };
+    rafRef.current = requestAnimationFrame(follow);
+    return () => {
+      stopped = true;
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [streaming, isUserScrolling]);
 
   // Kullanıcı input'a geldiğinde dibe yakınsa dibe çek
   const scrollToBottomIfNear = () => {

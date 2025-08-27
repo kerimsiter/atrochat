@@ -57,7 +57,7 @@ const App: React.FC = () => {
   const activeSession = sessions.find(s => s.id === activeSessionId) || null;
 
   const chatInputRef = useRef<ChatInputRef>(null);
-  const { scrollContainerRef, scrollToBottomIfNear } = useAutoScroll(activeSession?.messages, { streaming: isLoading });
+  const { scrollContainerRef, scrollToBottomIfNear } = useAutoScroll(activeSession?.messages.length ?? 0, { streaming: isLoading });
   
   const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newModel = e.target.value;
@@ -194,7 +194,7 @@ const App: React.FC = () => {
                   </button>
                 </div>
             </header>
-            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4">
+            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4" style={{ overflowAnchor: 'none' }}>
                 {activeSession.messages.map((msg) => (
                     <MessageBubble key={msg.id} message={msg} onDelete={deleteMessage} onEdit={editMessage} />
                 ))}
