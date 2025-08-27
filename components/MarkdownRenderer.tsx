@@ -35,7 +35,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
             let lang = normalizeLang(match ? match[1] : '');
             const rawText = String(children);
             const text = rawText.endsWith('\n') ? rawText.slice(0, -1) : rawText;
-            const isSingleShortLine = !text.includes('\n') && text.trim().length <= 80;
+            const isSingleLine = !text.includes('\n');
             const looksLikeCommand = /^(?:\$\s*)?(npm|pnpm|yarn|npx|git|cd|mkdir|rm|cp|mv|node|ts-node|python|pip|pip3)\b/.test(text.trim());
 
             if (inline) {
@@ -46,9 +46,8 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
               );
             }
 
-            // Heuristic: single short line without language -> render compact block instead of full CodeBlock header UI
-            if ((!lang || lang === 'plaintext') && isSingleShortLine) {
-              if (looksLikeCommand) lang = 'bash';
+            // Heuristic: ONLY render compact block for single-line command-like snippets without explicit language
+            if ((!lang || lang === 'plaintext') && isSingleLine && looksLikeCommand) {
               return (
                 <div className="my-3">
                   <code className="bg-obsidian border border-glass rounded px-3 py-2 block text-sm font-mono whitespace-pre-wrap break-words">
