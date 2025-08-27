@@ -99,6 +99,11 @@ const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({ onSendMessage, isL
       setInput('');
       setAttachments([]);
       setSpeechText('');
+
+      // Mesaj gönderildikten sonra mikrofon dinliyorsa kapat
+      if (isListening) {
+        stopListening();
+      }
     }
   };
 
