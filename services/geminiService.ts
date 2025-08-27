@@ -1,5 +1,7 @@
+
 import { GoogleGenAI, GenerateContentResponse, Content, Part } from "@google/genai";
 import { Role } from '../types';
+import { GEMINI_MODEL } from '../constants';
 
 let aiClient: GoogleGenAI | null = null;
 let currentApiKey: string | null = null;
@@ -36,10 +38,20 @@ export const getGeminiChatStream = async (
         tools.push({googleSearch: {}});
     }
 
+    const config: any = {
+        thinkingConfig: {
+            includeThoughts: true,
+        },
+    };
+
+    if (tools.length > 0) {
+        config.tools = tools;
+    }
+
     const response = await ai.models.generateContentStream({
-      model: "gemini-2.5-pro",
+      model: GEMINI_MODEL,
       contents: [...history, { role: Role.USER, parts: newParts }],
-      ...(tools.length > 0 && { config: { tools } }),
+      config: config,
     });
     return response;
   }

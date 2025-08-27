@@ -1,3 +1,5 @@
+
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChatSession, Message, Role, FileContent, UrlContextMetadata, Attachment } from '../types';
 import { getGeminiChatStream } from '../services/geminiService';
@@ -27,7 +29,7 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [resendPayload, setResendPayload] = useState<{ content: string; attachments: Attachment[], useUrlAnalysis: boolean, useGoogleSearch: boolean } | null>(null);
-
+  
   const sessionsRef = useRef(sessions);
   useEffect(() => {
     sessionsRef.current = sessions;
@@ -152,6 +154,7 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
           id: `msg-${Date.now()}`,
           role: Role.SYSTEM,
           content: "Proje zaten güncel. Değişiklik bulunamadı.",
+          // FIX: Corrected 'new new Date()' to 'new Date()'.
           timestamp: new Date().toISOString(),
         };
         updateSession(activeSessionId, s => ({ messages: [...s.messages, systemMessage] }));
@@ -254,14 +257,14 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
   
   const sendMessage = useCallback(async (messageContent: string, attachments: Attachment[], useUrlAnalysis: boolean, useGoogleSearch: boolean) => {
     if (!activeSessionId) return;
-    const currentSession = sessions.find(s => s.id === activeSessionId);
+    const currentSession = sessionsRef.current.find(s => s.id === activeSessionId);
     if(!currentSession) return;
     
     if (!geminiApiKey) {
       const errorMessage: Message = {
         id: `msg-${Date.now()}`,
         role: Role.MODEL,
-        content: "Gemini API anahtarı ayarlanmamış. Lütfen sağ üstteki Ayarlar menüsünden API anahtarınızı ekleyin.",
+        content: "Gemini API anahtarı ayarlanmamış. Lütfen ortam değişkenlerinizi kontrol edin.",
         timestamp: new Date().toISOString(),
       };
       updateSession(activeSessionId, s => ({ messages: [...s.messages, errorMessage] }));
@@ -309,19 +312,26 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
       timestamp: new Date().toISOString(),
     };
 
+    const modelMessageId = `msg-${Date.now() + 1}`;
+    const initialModelMessage: Message = {
+      id: modelMessageId,
+      role: Role.MODEL,
+      content: "",
+      timestamp: new Date().toISOString(),
+      isThinking: true,
+      thinkingSteps: [],
+    };
+    
     const updatedMessages = [...currentSession.messages, userMessage];
-    const historyTokenCount = updatedMessages
-      .filter(msg => msg.role !== Role.SYSTEM)
-      .reduce((acc, msg) => acc + estimateTokens(msg.apiContent || msg.content), 0);
-      
-    updateSession(activeSessionId, { 
-      messages: updatedMessages, 
-      files: [],
-      historyTokenCount,
-      isContextStale: false,
-      pendingContextUpdate: undefined,
-    });
 
+    updateSession(activeSessionId, s => ({
+        ...s,
+        messages: [...updatedMessages, initialModelMessage],
+        files: [],
+        isContextStale: false,
+        pendingContextUpdate: undefined,
+    }));
+    
     const messagesForHistory = updatedMessages
       .filter(msg => msg.role === Role.USER || msg.role === Role.MODEL);
 
@@ -359,16 +369,17 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
         });
     }
 
-    const inputTokens = estimateTokens(finalPartsForApi.map(p => p.text || '').join(''));
+    const inputTokens = estimateTokens(finalPartsForApi.map(p => 'text' in p ? p.text : '').join(''));
     const inputCost = (inputTokens / 1_000_000) * COST_PER_MILLION_TOKENS.INPUT;
     
     updateSession(activeSessionId, (s) => ({
       billedTokenCount: s.billedTokenCount + inputTokens,
+      historyTokenCount: s.historyTokenCount + inputTokens,
       cost: s.cost + inputCost,
     }));
     
     let modelResponse = '';
-    const modelMessageId = `msg-${Date.now() + 1}`;
+    let accumulatedThoughts = '';
     let groundingMetadata: any | undefined = undefined;
     let urlContextMetadata: UrlContextMetadata | undefined = undefined;
     
@@ -376,8 +387,17 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
       const stream = await getGeminiChatStream(geminiApiKey, history, finalPartsForApi, useGoogleSearch, useUrlAnalysis);
       
       for await (const chunk of stream) {
-        const chunkText = chunk.text;
-        modelResponse += chunkText;
+        let chunkAnswer = '';
+
+        for (const part of chunk.candidates[0].content.parts) {
+            if ((part as any).thought && part.text) {
+                accumulatedThoughts += part.text;
+            } else if (part.text) {
+                chunkAnswer += part.text;
+            }
+        }
+        
+        modelResponse += chunkAnswer;
 
         if (chunk.candidates?.[0]?.groundingMetadata) {
             groundingMetadata = {
@@ -390,23 +410,21 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
             urlContextMetadata = chunk.candidates[0].urlContextMetadata as UrlContextMetadata;
         }
 
-        setSessions(prevSessions => {
-            const currentSession = prevSessions.find(s => s.id === activeSessionId);
-            if (!currentSession) return prevSessions;
+        updateSession(activeSessionId, s => {
+            const currentModelMessage = s.messages.find(m => m.id === modelMessageId);
+            if (!currentModelMessage) return s;
 
-            const existingModelMessage = currentSession.messages.find(m => m.id === modelMessageId);
+            const updatedThinkingSteps = accumulatedThoughts
+                .split('\n')
+                .filter(step => step.trim() !== '');
 
-            if (!existingModelMessage) {
-                const newModelMessage: Message = {
-                    id: modelMessageId,
-                    role: Role.MODEL,
-                    content: chunkText,
-                    timestamp: new Date().toISOString(),
-                };
-                return prevSessions.map(s => s.id === activeSessionId ? { ...s, messages: [...s.messages, newModelMessage] } : s);
-            } else {
-                const updatedModelMessage = { ...existingModelMessage, content: modelResponse };
-                return prevSessions.map(s => s.id === activeSessionId ? { ...s, messages: s.messages.map(m => m.id === modelMessageId ? updatedModelMessage : m) } : s);
+            return {
+                ...s,
+                messages: s.messages.map(m =>
+                    m.id === modelMessageId
+                    ? { ...m, content: modelResponse, thinkingSteps: updatedThinkingSteps }
+                    : m
+                ),
             }
         });
       }
@@ -418,13 +436,14 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
       } else if (error instanceof Error) {
         errorText = `Bir hata oluştu: ${error.message}`;
       }
-      const errorMessage: Message = {
-        id: modelMessageId,
-        role: Role.MODEL,
-        content: errorText,
-        timestamp: new Date().toISOString(),
-      };
-       updateSession(activeSessionId, s => ({ messages: [...s.messages, errorMessage] }));
+       updateSession(activeSessionId, s => ({ 
+           ...s,
+           messages: s.messages.map(m => 
+               m.id === modelMessageId 
+               ? { ...m, content: errorText, isThinking: false }
+               : m
+           )
+       }));
     } finally {
         const outputTokens = estimateTokens(modelResponse);
         const outputCost = (outputTokens / 1_000_000) * COST_PER_MILLION_TOKENS.OUTPUT;
@@ -434,16 +453,22 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
             if (s.messages.filter(m => m.role !== Role.SYSTEM).length <= 2 && finalTitle === 'Yeni Sohbet') {
                 finalTitle = messageContent.substring(0, 30) + '...';
             }
-
+            
             const finalMessages = s.messages.map(m => {
                 if (m.id === modelMessageId) {
-                    return { ...m, groundingMetadata: groundingMetadata, urlContextMetadata: urlContextMetadata };
+                    return { 
+                        ...m, 
+                        isThinking: false, 
+                        groundingMetadata: groundingMetadata, 
+                        urlContextMetadata: urlContextMetadata 
+                    };
                 }
                 return m;
             });
 
             return {
                 billedTokenCount: s.billedTokenCount + outputTokens,
+                historyTokenCount: s.historyTokenCount + outputTokens,
                 cost: s.cost + outputCost,
                 title: finalTitle,
                 messages: finalMessages,
@@ -452,7 +477,7 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
 
       setIsLoading(false);
     }
-  }, [activeSessionId, sessions, updateSession, geminiApiKey]);
+  }, [activeSessionId, updateSession, geminiApiKey, githubToken]);
 
 
   useEffect(() => {
@@ -471,7 +496,7 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
   const editMessage = useCallback((messageId: string, newContent: string) => {
     if (!activeSessionId) return;
 
-    const session = sessions.find(s => s.id === activeSessionId);
+    const session = sessionsRef.current.find(s => s.id === activeSessionId);
     if (!session) return;
 
     const messageIndex = session.messages.findIndex(m => m.id === messageId);
@@ -482,15 +507,12 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
     const originalAttachments = session.messages[messageIndex].attachments || [];
     const truncatedMessages = session.messages.slice(0, messageIndex);
 
-    // Recalculate only the history token count for the truncated history.
     let newHistoryTokenCount = 0;
     truncatedMessages.forEach(msg => {
       if (msg.role === Role.SYSTEM) return;
       newHistoryTokenCount += estimateTokens(msg.apiContent || msg.content);
     });
 
-    // Update the session, but leave billedTokenCount and cost as they are.
-    // The cost of the edited-away messages has already been incurred.
     updateSession(activeSessionId, {
       messages: truncatedMessages,
       historyTokenCount: newHistoryTokenCount,
@@ -499,10 +521,10 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
     setResendPayload({
         content: newContent, 
         attachments: originalAttachments, 
-        useUrlAnalysis: false, // Assume false for edits, as this isn't re-configurable in the UI
+        useUrlAnalysis: false,
         useGoogleSearch: false,
     });
-  }, [activeSessionId, sessions, updateSession]);
+  }, [activeSessionId, updateSession]);
 
 
   return {

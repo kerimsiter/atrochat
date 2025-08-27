@@ -1,4 +1,4 @@
-export const GEMINI_MODEL = 'gemini-2.5-flash';
+export const GEMINI_MODEL = 'gemini-2.5-pro';
 
 // Heuristic for token estimation: 1 token ~= 4 characters
 export const TOKEN_ESTIMATE_FACTOR = 4;

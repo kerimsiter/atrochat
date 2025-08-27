@@ -37,6 +37,8 @@ export interface Message {
   groundingMetadata?: GroundingMetadata;
   urlContextMetadata?: UrlContextMetadata;
   attachments?: Attachment[];
+  isThinking?: boolean; // To show the thinking UI
+  thinkingSteps?: string[]; // To store the steps of the thinking process
 }
 
 export interface ChatSession {

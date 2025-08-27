@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import MessageBubble from './components/MessageBubble';
@@ -12,17 +13,12 @@ import TokenUsageDisplay from './components/TokenUsageDisplay';
 
 const App: React.FC = () => {
   const [githubToken, setGithubToken] = useState<string | null>(() => localStorage.getItem('githubPat'));
-  const [geminiApiKey, setGeminiApiKey] = useState<string | null>(() => localStorage.getItem('geminiApiKey'));
+  //- Fix: Removed Gemini API key state to use environment variable instead.
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
   const [showGitHubModal, setShowGitHubModal] = useState<boolean>(false);
   const [isRepoLoading, setIsRepoLoading] = useState<boolean>(false);
 
-  useEffect(() => {
-    // If there is no API key on initial load, show the settings modal.
-    if (!geminiApiKey) {
-      setShowSettingsModal(true);
-    }
-  }, [geminiApiKey]);
+  //- Fix: Removed effect that checks for Gemini API key, as it's now handled by environment variables.
 
 
   const {
@@ -38,7 +34,8 @@ const App: React.FC = () => {
     syncRepo,
     deleteMessage,
     editMessage,
-  } = useChatManager(geminiApiKey, githubToken);
+    //- Fix: Pass API key from environment variables as per guidelines.
+  } = useChatManager(process.env.API_KEY, githubToken);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<ChatInputRef>(null);
@@ -47,9 +44,8 @@ const App: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeSession?.messages, isLoading]);
   
-  const handleSaveSettings = (keys: { gemini: string; github: string }) => {
-    localStorage.setItem('geminiApiKey', keys.gemini);
-    setGeminiApiKey(keys.gemini);
+  //- Fix: Settings handler now only manages the GitHub token.
+  const handleSaveSettings = (keys: { github: string }) => {
     localStorage.setItem('githubPat', keys.github);
     setGithubToken(keys.github);
     setShowSettingsModal(false);
@@ -104,7 +100,8 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen font-sans">
-      {showSettingsModal && <SettingsModal onSave={handleSaveSettings} onClose={() => setShowSettingsModal(false)} currentGitHubToken={githubToken} currentGeminiApiKey={geminiApiKey} />}
+      {/*-//- Fix: Updated SettingsModal props to remove Gemini API key management.*/}
+      {showSettingsModal && <SettingsModal onSave={handleSaveSettings} onClose={() => setShowSettingsModal(false)} currentGitHubToken={githubToken} />}
       {showGitHubModal && <GitHubRepoModal onLoad={handleLoadRepo} onClose={() => setShowGitHubModal(false)} isLoading={isRepoLoading} />}
       <Sidebar
         sessions={sessions}
@@ -161,16 +158,6 @@ const App: React.FC = () => {
                 {activeSession.messages.map((msg) => (
                     <MessageBubble key={msg.id} message={msg} onDelete={deleteMessage} onEdit={editMessage} />
                 ))}
-                {isLoading && (
-                  <div className="flex items-start gap-3 my-4 justify-start">
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-surface-light flex items-center justify-center"><BotIcon className="w-5 h-5" /></div>
-                    <div className="px-4 py-3 rounded-lg bg-surface-light text-primary rounded-bl-none">
-                      <div className="flex items-center">
-                        <span className="text-sm text-secondary animate-pulse">Yazıyor...</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
                 <div ref={messagesEndRef} />
             </div>
             <ChatInput ref={chatInputRef} onSendMessage={sendMessage} isLoading={isLoading} />

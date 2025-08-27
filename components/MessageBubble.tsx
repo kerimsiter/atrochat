@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Message, Role, Attachment } from '../types';
 import { UserIcon, BotIcon, ClipboardIcon, CheckIcon, FileIcon, PencilIcon, TrashIcon } from './icons';
 import MarkdownRenderer from './MarkdownRenderer';
+import ThinkingProcess from './ThinkingProcess';
 
 interface MessageBubbleProps {
   message: Message;
@@ -139,6 +140,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDelete, onEdit
   
   const Icon = isUser ? UserIcon : BotIcon;
 
+  const showThinkingProcess = !isUser && (message.isThinking || (message.thinkingSteps && message.thinkingSteps.length > 0));
+
   return (
     <div className={`flex items-start gap-3 my-4 ${containerClasses}`}>
        {!isUser && <div className="flex-shrink-0 w-8 h-8 rounded-full bg-surface-light flex items-center justify-center"><Icon className="w-5 h-5" /></div>}
@@ -151,6 +154,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDelete, onEdit
                     ))}
                 </div>
             )}
+            
+            {showThinkingProcess && (
+                <ThinkingProcess 
+                    steps={message.thinkingSteps || []}
+                    isThinking={!!message.isThinking}
+                />
+            )}
+
            <div className="text-sm leading-relaxed">
             {isEditing ? (
                 <div>
@@ -175,7 +186,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDelete, onEdit
                     </div>
                 </div>
             ) : (
-                <MarkdownRenderer content={contentWithCitations} />
+                message.content && <MarkdownRenderer content={contentWithCitations} />
             )}
            </div>
            
@@ -263,9 +274,11 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDelete, onEdit
             </div>
           )}
         </div>
-        <div className={`text-xs text-secondary/60 mt-1 px-1 ${isUser ? 'text-right' : 'text-left'}`}>
-            {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </div>
+        {!message.isThinking && (
+            <div className={`text-xs text-secondary/60 mt-1 px-1 ${isUser ? 'text-right' : 'text-left'}`}>
+                {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </div>
+        )}
       </div>
        {isUser && <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent-dark flex items-center justify-center"><Icon className="w-5 h-5" /></div>}
     </div>
