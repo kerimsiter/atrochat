@@ -26,7 +26,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
   };
 
   return (
-    <div className="prose prose-invert max-w-none text-primary break-words">
+    <div className="prose prose-invert max-w-none text-primary break-words text-[18px] leading-8">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -41,7 +41,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
             // Robust inline detection: respect inline prop OR absence of newline
             if (inline || !rawText.includes('\n')) {
               return (
-                <code className="bg-surface-light text-accent px-1.5 py-0.5 rounded text-sm font-mono" {...props}>
+                <code className="bg-surface-light text-accent px-1.5 py-0.5 rounded text-[16px] font-mono" {...props}>
                   {text}
                 </code>
               );
@@ -51,7 +51,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
             if ((!lang || lang === 'plaintext') && isSingleLine && looksLikeCommand) {
               return (
                 <div className="my-3">
-                  <code className="bg-obsidian border border-glass rounded px-3 py-2 block text-sm font-mono whitespace-pre-wrap break-words">
+                  <code className="bg-obsidian border border-glass rounded px-3 py-2 block text-[16px] font-mono whitespace-pre-wrap break-words">
                     {text}
                   </code>
                 </div>
@@ -70,7 +70,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
           table({ children }) {
             return (
               <div className="my-4 overflow-x-auto">
-                <table className="w-full border-collapse text-sm">
+                <table className="w-full border-collapse text-[16px] leading-8">
                   {children}
                 </table>
               </div>

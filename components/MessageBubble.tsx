@@ -163,8 +163,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDelete, onEdit
   }
 
   const bubbleClasses = isUser
-    ? 'bg-blue-600 text-primary rounded-br-none'
-    : 'bg-surface-light text-primary rounded-bl-none';
+    ? 'bg-accent-dark text-white rounded-br-md shadow-md'
+    : 'bg-surface-light text-primary border border-glass rounded-bl-md shadow-sm';
   
   const containerClasses = isUser ? 'justify-end' : 'justify-start';
   
@@ -176,10 +176,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDelete, onEdit
   const visibleSources = showAllSources ? allSources : allSources.slice(0, 3);
 
   return (
-    <div className={`flex items-start gap-3 my-4 ${containerClasses}`}>
-       {!isUser && <div className="flex-shrink-0 w-8 h-8 rounded-full bg-surface-light flex items-center justify-center"><Icon className="w-5 h-5" /></div>}
-      <div className={`flex flex-col max-w-2xl w-full`}>
-        <div className={`relative group px-4 py-3 rounded-lg ${bubbleClasses}`}>
+    <div className={`flex items-start gap-3 my-5 ${containerClasses}`}>
+       {!isUser && (
+         <div className="flex-shrink-0 w-9 h-9 rounded-full bg-surface-light border border-glass flex items-center justify-center">
+           <Icon className="w-5 h-5 text-secondary" />
+         </div>
+       )}
+      <div className={`flex flex-col max-w-7xl w-full`}>
+        <div className={`relative group px-5 py-4 rounded-2xl ${bubbleClasses}`}>
             {message.attachments && message.attachments.length > 0 && !isEditing && (
                 <div className="mb-2 grid grid-cols-2 gap-2">
                     {message.attachments.map((att, index) => (
@@ -195,14 +199,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDelete, onEdit
                 />
             )}
 
-           <div className="text-sm leading-relaxed">
+           <div className="text-[18px] leading-8">{/* daha okunur metin boyutu ve satır yüksekliği */}
             {isEditing ? (
                 <div>
                     <textarea
                         ref={editTextAreaRef}
                         value={editedContent}
                         onChange={handleEditInput}
-                        className="w-full bg-surface/80 text-primary rounded-lg p-2 resize-none focus:ring-2 focus:ring-accent-darker focus:outline-none transition max-h-60 overflow-y-auto"
+                        className="w-full bg-surface/80 text-primary rounded-lg p-3.5 resize-none focus:ring-2 focus:ring-accent-darker focus:outline-none transition max-h-60 overflow-y-auto text-[18px]"
                         rows={1}
                         onKeyDown={(e) => {
                             if (e.key === 'Enter' && !e.shiftKey) {
@@ -213,9 +217,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDelete, onEdit
                             }
                         }}
                     />
-                    <div className="flex justify-end items-center gap-2 mt-2">
-                        <button onClick={handleCancelEdit} className="text-xs px-3 py-1 rounded bg-surface-lighter hover:bg-surface-light text-secondary">İptal</button>
-                        <button onClick={handleSaveEdit} className="text-xs px-3 py-1 rounded bg-accent hover:bg-accent-dark text-primary font-semibold">Kaydet</button>
+                    <div className="flex justify-end items-center gap-2 mt-3">
+                        <button onClick={handleCancelEdit} className="text-xs px-3 py-1.5 rounded-md bg-surface-lighter hover:bg-surface-light text-secondary border border-glass">İptal</button>
+                        <button onClick={handleSaveEdit} className="text-xs px-3.5 py-1.5 rounded-md bg-accent hover:bg-accent-dark text-primary font-semibold">Kaydet</button>
                     </div>
                 </div>
             ) : (
@@ -227,7 +231,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDelete, onEdit
              {!isUser && (
               <button
                 onClick={handleCopy}
-                className="p-1 rounded-md bg-surface-lighter/50 text-secondary opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-200"
+                className="p-1.5 rounded-md bg-surface-lighter/60 backdrop-blur text-secondary opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-200 hover:bg-surface-lighter"
                 aria-label="Mesajı kopyala"
               >
                 {isCopied ? (
@@ -241,14 +245,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDelete, onEdit
                 <>
                     <button
                         onClick={() => setIsEditing(true)}
-                        className="p-1 rounded-md bg-surface-lighter/50 text-secondary opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-200"
+                        className="p-1.5 rounded-md bg-surface-lighter/60 text-secondary opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-200 hover:bg-surface-lighter"
                         aria-label="Mesajı düzenle"
                     >
                        <PencilIcon className="w-4 h-4" />
                     </button>
                      <button
                         onClick={handleDelete}
-                        className="p-1 rounded-md bg-surface-lighter/50 text-secondary opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-200"
+                        className="p-1.5 rounded-md bg-surface-lighter/60 text-secondary opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-200 hover:bg-surface-lighter"
                         aria-label="Mesajı sil"
                     >
                        <TrashIcon className="w-4 h-4" />
@@ -258,14 +262,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDelete, onEdit
            </div>
 
           {message.groundingMetadata?.groundingChunks && message.groundingMetadata.groundingChunks.length > 0 && (
-            <div className="mt-4 pt-3 border-t border-glass/30">
+            <div className="mt-4 pt-3 border-t border-glass/40">
                 {Array.isArray(message.groundingMetadata?.webSearchQueries) && message.groundingMetadata.webSearchQueries.length > 0 && (
-                  <div className="mb-2 text-xs text-secondary italic">
+                  <div className="mb-2 text-[11px] text-secondary italic">
                     Aranan: "{message.groundingMetadata.webSearchQueries.join(', ')}"
                   </div>
                 )}
-                <h4 className="text-xs font-semibold text-secondary mb-2">Kaynaklar:</h4>
-                <div className="flex flex-col space-y-1.5">
+                <h4 className="text-[11px] font-semibold text-secondary mb-2 tracking-wide uppercase">Kaynaklar</h4>
+                <div className="flex flex-col space-y-1">
                     {visibleSources.map((chunk, index) => (
                         chunk.web && (
                             <a 
@@ -273,10 +277,10 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDelete, onEdit
                                 href={chunk.web.uri} 
                                 target="_blank" 
                                 rel="noopener noreferrer" 
-                                className="text-xs text-accent hover:underline flex items-start"
+                                className="text-[13px] text-accent hover:underline flex items-start"
                                 title={chunk.web.uri}
                             >
-                                <span className="mr-2 flex-shrink-0 font-semibold">[{(showAllSources ? index : index) + 1}]</span>
+                                <span className="mr-2 flex-shrink-0 font-semibold text-secondary">[{(showAllSources ? index : index) + 1}]</span>
                                 <span className="truncate">{chunk.web.title || getDomainFromUrl(chunk.web.uri)}</span>
                             </a>
                         )
@@ -286,7 +290,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDelete, onEdit
                   <div className="mt-2">
                     <button
                       onClick={() => setShowAllSources(!showAllSources)}
-                      className="text-xs text-secondary hover:text-primary underline"
+                      className="text-[12px] text-secondary hover:text-primary underline"
                     >
                       {showAllSources ? 'Daha az göster' : `${allSources.length - 3} kaynak daha göster`}
                     </button>
@@ -295,13 +299,13 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDelete, onEdit
             </div>
           )}
           {message.urlContextMetadata && Array.isArray(message.urlContextMetadata.url_metadata) && message.urlContextMetadata.url_metadata.length > 0 && (
-            <div className="mt-4 pt-3 border-t border-glass/30">
-                <h4 className="text-xs font-semibold text-secondary mb-2">Analiz Edilen URL'ler:</h4>
-                <div className="flex flex-col space-y-1.5">
+            <div className="mt-4 pt-3 border-t border-glass/40">
+                <h4 className="text-[11px] font-semibold text-secondary mb-2 tracking-wide uppercase">Analiz Edilen URL'ler</h4>
+                <div className="flex flex-col space-y-1">
                     {message.urlContextMetadata.url_metadata.map((meta, index) => {
                         const isSuccess = meta.url_retrieval_status === 'URL_RETRIEVAL_STATUS_SUCCESS';
                         return (
-                            <div key={index} className="flex items-start text-xs">
+                            <div key={index} className="flex items-start text-[13px]">
                                 <span className={`mr-2 flex-shrink-0 font-mono ${isSuccess ? 'text-positive' : 'text-warm'}`}>
                                     [{isSuccess ? '✓' : '✗'}]
                                 </span>
@@ -323,12 +327,16 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDelete, onEdit
           )}
         </div>
         {!message.isThinking && (
-            <div className={`text-xs text-secondary/60 mt-1 px-1 ${isUser ? 'text-right' : 'text-left'}`}>
+            <div className={`text-[11px] text-secondary/70 mt-1 px-1 ${isUser ? 'text-right' : 'text-left'}`}>
                 {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </div>
         )}
       </div>
-       {isUser && <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent-dark flex items-center justify-center"><Icon className="w-5 h-5" /></div>}
+       {isUser && (
+         <div className="flex-shrink-0 w-9 h-9 rounded-full bg-accent-dark text-white flex items-center justify-center shadow-md">
+           <Icon className="w-5 h-5" />
+         </div>
+       )}
     </div>
   );
 };

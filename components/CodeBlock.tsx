@@ -46,7 +46,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, content }) => {
   };
 
   return (
-    <div className="bg-obsidian rounded-lg my-4 border border-glass relative group text-sm">
+    <div className="bg-obsidian rounded-lg my-4 border border-glass relative group text-base">
       <div className="flex justify-between items-center px-4 py-2 bg-surface/50 rounded-t-md">
         {lang && lang !== 'plaintext' ? (
           <span className="text-xs font-sans text-secondary select-none">{lang}</span>
@@ -70,13 +70,16 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, content }) => {
         wrapLongLines
         customStyle={{
           margin: 0,
-          padding: '16px',
+          padding: '18px',
           backgroundColor: 'transparent',
-          fontSize: '14px',
+          fontSize: '16px',
+          lineHeight: '1.75',
         }}
         codeTagProps={{
           style: {
             fontFamily: '"Fira Code", "JetBrains Mono", monospace',
+            fontSize: '16px',
+            lineHeight: '1.75',
           },
         }}
       >

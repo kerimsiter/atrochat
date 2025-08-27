@@ -26,22 +26,23 @@
       theme: {
         extend: {
           colors: {
-            obsidian: '#18191c',
+            obsidian: '#141414',
             surface: {
-              DEFAULT: '#2a2d31',
-              light: '#36393f',
-              lighter: '#40444b',
+              DEFAULT: '#202020',
+              light: '#282828',
+              lighter: '#363636',
             },
             accent: {
-              DEFAULT: '#818cf8', // indigo-300
-              dark: '#6366f1', // indigo-500
-              darker: '#4f46e5', // indigo-600
+              DEFAULT: '#818cf8',
+              dark: '#6366f1',
+              darker: '#4f46e5',
             },
-            primary: '#e3e4e6',
-            secondary: '#b9bbbe',
+            primary: '#f1f1f1',
+            secondary: '#a8a8a8',
             glass: {
-              DEFAULT: 'rgba(255, 255, 255, 0.05)',
-              light: 'rgba(255, 255, 255, 0.1)',
+              DEFAULT: 'rgba(217, 217, 217, 0.05)',
+              light: 'rgba(168, 168, 168, 0.10)',
+              subtle: 'rgba(54, 54, 54, 0.70)',
             },
             warm: '#f59e0b',
             positive: '#22c55e',
@@ -53,12 +54,12 @@
 <style>
   body {
     font-family: 'Inter', sans-serif;
-    background-color: #18191c;
+    background-color: #141414; /* obsidian */
     background-image:
-      linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+      linear-gradient(rgba(217, 217, 217, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(217, 217, 217, 0.03) 1px, transparent 1px);
     background-size: 30px 30px;
-    color: #e3e4e6; /* text-primary */
+    color: #f1f1f1; /* text-primary */
   }
   ::-webkit-scrollbar {
     width: 8px;
@@ -68,11 +69,11 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background-color: #40444b; /* bg-surface-lighter */
+    background-color: #363636; /* surface.lighter */
     border-radius: 4px;
   }
   .glass-surface {
-    background-color: rgba(42, 45, 49, 0.5); /* bg-surface/50 */
+    background-color: rgba(32, 32, 32, 0.5); /* surface.DEFAULT at 50% */
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
   }
