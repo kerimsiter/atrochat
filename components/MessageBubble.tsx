@@ -31,6 +31,16 @@ const AttachmentDisplay: React.FC<{ attachment: Attachment }> = ({ attachment })
 };
 
 
+// Helper: derive a readable domain from URL
+const getDomainFromUrl = (url: string): string => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch (e) {
+    return url;
+  }
+};
+
+
 // Helper function to insert citations into the text
 const addCitationsToContent = (
   content: string, 
@@ -72,6 +82,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDelete, onEdit
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(message.content);
   const editTextAreaRef = useRef<HTMLTextAreaElement>(null);
+  const [showAllSources, setShowAllSources] = useState(false);
 
   const isUser = message.role === Role.USER;
   const isSystem = message.role === Role.SYSTEM;
@@ -142,6 +153,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDelete, onEdit
   const Icon = isUser ? UserIcon : BotIcon;
 
   const showThinkingProcess = !isUser && (message.isThinking || (message.thinkingSteps && message.thinkingSteps.length > 0));
+
+  const allSources = (message.groundingMetadata?.groundingChunks || []) as Array<any>;
+  const visibleSources = showAllSources ? allSources : allSources.slice(0, 3);
 
   return (
     <div className={`flex items-start gap-3 my-4 ${containerClasses}`}>
@@ -227,9 +241,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDelete, onEdit
 
           {message.groundingMetadata?.groundingChunks && message.groundingMetadata.groundingChunks.length > 0 && (
             <div className="mt-4 pt-3 border-t border-glass/30">
+                {Array.isArray(message.groundingMetadata?.webSearchQueries) && message.groundingMetadata.webSearchQueries.length > 0 && (
+                  <div className="mb-2 text-xs text-secondary italic">
+                    Aranan: "{message.groundingMetadata.webSearchQueries.join(', ')}"
+                  </div>
+                )}
                 <h4 className="text-xs font-semibold text-secondary mb-2">Kaynaklar:</h4>
                 <div className="flex flex-col space-y-1.5">
-                    {message.groundingMetadata.groundingChunks.map((chunk, index) => (
+                    {visibleSources.map((chunk, index) => (
                         chunk.web && (
                             <a 
                                 key={index} 
@@ -239,12 +258,22 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDelete, onEdit
                                 className="text-xs text-accent hover:underline flex items-start"
                                 title={chunk.web.uri}
                             >
-                                <span className="mr-2 flex-shrink-0 font-semibold">[{index + 1}]</span>
-                                <span className="truncate">{chunk.web.title || chunk.web.uri}</span>
+                                <span className="mr-2 flex-shrink-0 font-semibold">[{(showAllSources ? index : index) + 1}]</span>
+                                <span className="truncate">{chunk.web.title || getDomainFromUrl(chunk.web.uri)}</span>
                             </a>
                         )
                     ))}
                 </div>
+                {allSources.length > 3 && (
+                  <div className="mt-2">
+                    <button
+                      onClick={() => setShowAllSources(!showAllSources)}
+                      className="text-xs text-secondary hover:text-primary underline"
+                    >
+                      {showAllSources ? 'Daha az göster' : `${allSources.length - 3} kaynak daha göster`}
+                    </button>
+                  </div>
+                )}
             </div>
           )}
           {message.urlContextMetadata && Array.isArray(message.urlContextMetadata.url_metadata) && message.urlContextMetadata.url_metadata.length > 0 && (
