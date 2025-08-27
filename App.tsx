@@ -35,6 +35,7 @@ const App: React.FC = () => {
     activeSession,
     isLoading,
     isSyncing,
+    isHydrating,
     sendMessage,
     stopGeneration,
     startNewChat,
@@ -131,7 +132,11 @@ const App: React.FC = () => {
       />
       
       <main className="flex-1 flex flex-col h-screen min-w-0">
-        {activeSession ? (
+        {isHydrating ? (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-secondary animate-pulse">Yükleniyor…</div>
+          </div>
+        ) : activeSession ? (
           <>
             <header className="flex-shrink-0 flex items-center justify-between p-4 border-b border-glass glass-surface">
                 <div className="flex items-center gap-2 min-w-0">

@@ -25,6 +25,7 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isHydrating, setIsHydrating] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [resendPayload, setResendPayload] = useState<{ content: string; attachments: Attachment[], useUrlAnalysis: boolean, useGoogleSearch: boolean } | null>(null);
   
@@ -43,9 +44,9 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
       const savedSessions = localStorage.getItem('chatSessions');
       if (savedSessions) {
         const parsedSessions = JSON.parse(savedSessions).map((s: any) => ({
-          ...createInitialSession(), // Start with defaults for new fields
+          ...createInitialSession(),
           ...s,
-          billedTokenCount: s.billedTokenCount ?? s.tokenCount ?? 0, // Handle legacy tokenCount
+          billedTokenCount: s.billedTokenCount ?? s.tokenCount ?? 0,
         }));
         if (Array.isArray(parsedSessions) && parsedSessions.length > 0) {
           setSessions(parsedSessions);
@@ -60,6 +61,8 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
     } catch (error) {
       console.error("Failed to load sessions from localStorage:", error);
       startNewChat();
+    } finally {
+      setIsHydrating(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -588,6 +591,7 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
     activeSession,
     isLoading,
     isSyncing,
+    isHydrating,
     sendMessage,
     stopGeneration,
     startNewChat,
