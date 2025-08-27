@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { FolderIcon, FileIcon, ChevronRightIcon, EyeIcon, AtSymbolIcon } from './icons';
 
 interface FileTreeProps {
   paths: string[];
+  isSearching?: boolean;
   onFileSelect: (path: string) => void;
   onFileView?: (path: string) => void;
 }
@@ -35,9 +36,17 @@ const buildTree = (paths: string[]): TreeNode => {
   return root;
 };
 
-const TreeNodeComponent: React.FC<{ node: TreeNode; onFileSelect: (path: string) => void; onFileView?: (path: string) => void; level: number }> = ({ node, onFileSelect, onFileView, level }) => {
-  const [isOpen, setIsOpen] = useState(false);
+const TreeNodeComponent: React.FC<{ node: TreeNode; isSearching?: boolean; onFileSelect: (path: string) => void; onFileView?: (path: string) => void; level: number }> = ({ node, isSearching, onFileSelect, onFileView, level }) => {
   const isFolder = !!node.children;
+  const [isOpen, setIsOpen] = useState<boolean>(!!isSearching && isFolder);
+  
+  // Arama modu değiştiğinde klasörleri açık/kapalı senkronize et
+  useEffect(() => {
+    if (isFolder) {
+      setIsOpen(!!isSearching);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSearching, isFolder, node.path]);
 
   // Satıra tıklama sadece klasör aç/kapa yapar
   const handleRowClick = () => {
@@ -100,7 +109,7 @@ const TreeNodeComponent: React.FC<{ node: TreeNode; onFileSelect: (path: string)
       {isFolder && isOpen && (
         <div>
           {sortedChildren.map(child => (
-            <TreeNodeComponent key={child.path} node={child} onFileSelect={onFileSelect} onFileView={onFileView} level={level + 1} />
+            <TreeNodeComponent key={child.path} node={child} isSearching={isSearching} onFileSelect={onFileSelect} onFileView={onFileView} level={level + 1} />
           ))}
         </div>
       )}
@@ -108,7 +117,7 @@ const TreeNodeComponent: React.FC<{ node: TreeNode; onFileSelect: (path: string)
   );
 };
 
-const FileTree: React.FC<FileTreeProps> = ({ paths, onFileSelect, onFileView }) => {
+const FileTree: React.FC<FileTreeProps> = ({ paths, isSearching, onFileSelect, onFileView }) => {
   const tree = useMemo(() => buildTree(paths), [paths]);
   const sortedRootChildren = Object.values(tree.children || {}).sort((a, b) => {
     const aIsFolder = !!a.children;
@@ -120,7 +129,7 @@ const FileTree: React.FC<FileTreeProps> = ({ paths, onFileSelect, onFileView }) 
   return (
     <div>
       {sortedRootChildren.map(node => (
-        <TreeNodeComponent key={node.path} node={node} onFileSelect={onFileSelect} onFileView={onFileView} level={0} />
+        <TreeNodeComponent key={node.path} node={node} isSearching={isSearching} onFileSelect={onFileSelect} onFileView={onFileView} level={0} />
       ))}
     </div>
   );

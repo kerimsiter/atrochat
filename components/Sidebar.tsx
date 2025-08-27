@@ -1,7 +1,7 @@
 
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { ChatSession, FileContent } from '../types';
-import { PlusIcon, ChatBubbleIcon, TrashIcon, ChevronDoubleLeftIcon } from './icons';
+import { PlusIcon, ChatBubbleIcon, TrashIcon, ChevronDoubleLeftIcon, SearchIcon } from './icons';
 import FileTree from './FileTree';
 
 interface SidebarProps {
@@ -18,7 +18,26 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, sessions, activeSessionId, onNewChat, onSelectChat, onDeleteChat, projectFiles, onFileSelect, onFileView }) => {
-  const filePaths = projectFiles?.map(f => f.path) || [];
+  const [searchTerm, setSearchTerm] = useState('');
+  const filePaths = useMemo(() => projectFiles?.map(f => f.path) || [], [projectFiles]);
+
+  const filteredPaths = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return filePaths;
+    const matched = new Set<string>();
+    for (const p of filePaths) {
+      if (p.toLowerCase().includes(term)) {
+        matched.add(p);
+        const parts = p.split('/');
+        let cur = '';
+        for (let i = 0; i < parts.length - 1; i++) {
+          cur += (i > 0 ? '/' : '') + parts[i];
+          matched.add(cur);
+        }
+      }
+    }
+    return Array.from(matched);
+  }, [filePaths, searchTerm]);
 
   return (
     <div className={`glass-surface flex-shrink-0 flex flex-col h-full border-r border-glass transition-all duration-300 ease-in-out ${isOpen ? 'w-80 p-4' : 'w-0 p-0 border-r-0'}`}>
@@ -63,9 +82,26 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, sessions, activeSes
         </div>
 
         {filePaths.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-glass flex-shrink-0 max-h-64 overflow-y-auto">
+          <div className="mt-4 pt-4 border-t border-glass flex-shrink-0 flex flex-col min-h-0 max-h-64">
               <h2 className="text-xs font-semibold text-secondary uppercase tracking-wider mb-2">Proje Dosyaları</h2>
-              <FileTree paths={filePaths} onFileSelect={onFileSelect} onFileView={onFileView} />
+
+              <div className="relative mb-2">
+                <input
+                  type="text"
+                  placeholder="Dosya ara..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-surface text-primary rounded-md pl-8 pr-2 py-1.5 text-sm focus:ring-2 focus:ring-accent-dark focus:outline-none transition placeholder-secondary/70 border border-transparent"
+                  aria-label="Dosya ara"
+                />
+                <div className="absolute left-2 top-1/2 -translate-y-1/2 text-secondary">
+                   <SearchIcon className="w-4 h-4" />
+                </div>
+              </div>
+
+              <div className="flex-grow overflow-y-auto">
+                <FileTree paths={filteredPaths} isSearching={!!searchTerm.trim()} onFileSelect={onFileSelect} onFileView={onFileView} />
+              </div>
           </div>
         )}
 
