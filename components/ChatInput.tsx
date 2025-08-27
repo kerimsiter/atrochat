@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, KeyboardEvent, useImperativeHandle, forwardRef, DragEvent, ClipboardEvent } from 'react';
-import { SendIcon, PaperclipIcon, FileIcon, XCircleIcon } from './icons';
+import { SendIcon, PaperclipIcon, FileIcon, XCircleIcon, MicrophoneIcon } from './icons';
 import { Attachment } from '../types';
 import { processFile } from '../utils/fileProcessor';
+import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 
 interface ChatInputProps {
   onSendMessage: (message: string, attachments: Attachment[], useUrlAnalysis: boolean, useGoogleSearch: boolean) => void;
@@ -10,7 +11,7 @@ interface ChatInputProps {
 }
 
 export interface ChatInputRef {
-    addFileReference: (filePath: string) => void;
+  addFileReference: (filePath: string) => void;
 }
 
 const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({ onSendMessage, isLoading, onStop }, ref) => {
@@ -22,11 +23,21 @@ const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({ onSendMessage, isL
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Ses Tanıma
+  const {
+    text: speechText,
+    setText: setSpeechText,
+    isListening,
+    startListening,
+    stopListening,
+    hasRecognitionSupport,
+  } = useSpeechRecognition();
+
   useImperativeHandle(ref, () => ({
     addFileReference: (filePath: string) => {
-        const fileRef = `@${filePath} `;
-        setInput(prev => fileRef + prev);
-        textareaRef.current?.focus();
+      const fileRef = `@${filePath} `;
+      setInput(prev => fileRef + prev);
+      textareaRef.current?.focus();
     }
   }));
 
@@ -37,6 +48,13 @@ const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({ onSendMessage, isL
       textareaRef.current.style.height = `${scrollHeight}px`;
     }
   }, [input]);
+
+  // Konuşma ile gelen metni input'a yansıt
+  useEffect(() => {
+    if (speechText !== undefined) {
+      setInput(speechText);
+    }
+  }, [speechText]);
 
   const addFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -79,6 +97,17 @@ const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({ onSendMessage, isL
       onSendMessage(input.trim(), processedAttachments, useUrlAnalysis, useGoogleSearch);
       setInput('');
       setAttachments([]);
+      setSpeechText('');
+    }
+  };
+
+  const handleMicClick = () => {
+    if (!hasRecognitionSupport || isLoading) return;
+    if (isListening) {
+      stopListening();
+    } else {
+      setInput('');
+      startListening();
     }
   };
 
@@ -147,6 +176,21 @@ const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({ onSendMessage, isL
             className="hidden" 
             multiple 
         />
+        {hasRecognitionSupport && (
+          <button
+            onClick={handleMicClick}
+            disabled={isLoading}
+            className={`p-2 mr-2 rounded-full transition-colors ${
+              isListening
+                ? 'text-red-500 bg-red-500/20'
+                : 'text-secondary hover:text-primary hover:bg-surface-light'
+            } disabled:opacity-50`}
+            aria-label={isListening ? 'Kaydı Durdur' : 'Sesli Girişi Başlat'}
+            type="button"
+          >
+            <MicrophoneIcon className="w-6 h-6" />
+          </button>
+        )}
         <textarea
           ref={textareaRef}
           value={input}
