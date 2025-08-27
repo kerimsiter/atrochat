@@ -617,9 +617,12 @@ ${transcript}
     }
     set({ isSyncing: true });
     try {
+      // Eğer bekleyen bir güncelleme varsa, karşılaştırma tabanı olarak onun SHA'sını kullan
+      const pending = (currentSession as any).pendingContextUpdate;
+      const baseShaForCompare = pending?.newCommitSha || currentSession.projectCommitSha;
       const { newCommitSha, addedFiles, modifiedFiles, removedPaths, hasChanges } = await syncRepoChanges(
         currentSession.projectRepoUrl,
-        currentSession.projectCommitSha,
+        baseShaForCompare,
         githubToken
       );
       if (!hasChanges) {
@@ -657,17 +660,34 @@ ${transcript}
           content: `Proje güncellendi: ${summary}. Bağlam güncellendi (${diffSign}${tokenDiff.toLocaleString()} token).`,
           timestamp: new Date().toISOString(),
         };
+
+        // Mevcut pendingContextUpdate ile yeni değişiklikleri birleştir
+        const existingPending = (s as any).pendingContextUpdate || { added: [], modified: [], removed: [], newCommitSha: baseShaForCompare };
+        const addedMap = new Map<string, any>();
+        const modifiedMap = new Map<string, any>();
+        const removedSet = new Set<string>(existingPending.removed || []);
+
+        // Önce mevcut pending'i uygula
+        (existingPending.added || []).forEach((f: any) => { addedMap.set(f.path, f); modifiedMap.delete(f.path); removedSet.delete(f.path); });
+        (existingPending.modified || []).forEach((f: any) => { if (!addedMap.has(f.path)) modifiedMap.set(f.path, f); removedSet.delete(f.path); });
+
+        // Sonra yeni değişiklikleri uygula
+        addedFiles.forEach((f: any) => { addedMap.set(f.path, f); modifiedMap.delete(f.path); removedSet.delete(f.path); });
+        modifiedFiles.forEach((f: any) => { if (!addedMap.has(f.path)) modifiedMap.set(f.path, f); removedSet.delete(f.path); });
+        removedPaths.forEach((p: string) => { addedMap.delete(p); modifiedMap.delete(p); removedSet.add(p); });
+
+        const mergedPending = {
+          added: Array.from(addedMap.values()),
+          modified: Array.from(modifiedMap.values()),
+          removed: Array.from(removedSet.values()),
+          newCommitSha,
+        };
         return {
           ...s,
           projectFiles: updatedFiles,
           // Commit SHA'yı hemen güncelleme; bir sonraki mesajda AI'a bağlam aktarılırken güncelleyeceğiz
           projectTokenCount: newProjectTokenCount,
-          pendingContextUpdate: {
-            added: addedFiles,
-            modified: modifiedFiles,
-            removed: removedPaths,
-            newCommitSha: newCommitSha,
-          },
+          pendingContextUpdate: mergedPending,
           messages: [...s.messages, systemMessage],
         } as ChatSession;
       }) });
