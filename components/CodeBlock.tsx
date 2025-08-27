@@ -11,7 +11,32 @@ interface CodeBlockProps {
 const CodeBlock: React.FC<CodeBlockProps> = ({ language, content }) => {
   const [isCopied, setIsCopied] = useState(false);
 
-  const lang = language || 'plaintext';
+  const inferLanguage = (text: string): string => {
+    const firstLine = text.split('\n')[0] || '';
+    // By filename
+    const m = firstLine.match(/\.([a-zA-Z0-9]+)$/);
+    if (m) {
+      const ext = m[1].toLowerCase();
+      const map: Record<string, string> = {
+        js: 'javascript', jsx: 'jsx', ts: 'typescript', tsx: 'tsx',
+        py: 'python', rb: 'ruby', go: 'go', rs: 'rust', java: 'java',
+        cs: 'csharp', cpp: 'cpp', c: 'c', sh: 'bash', yml: 'yaml', yaml: 'yaml',
+        html: 'markup', css: 'css', json: 'json', md: 'markdown'
+      };
+      if (map[ext]) return map[ext];
+    }
+    const t = text.toLowerCase();
+    if (/^\s*</.test(t)) return 'markup';
+    if (/\b(import|export)\b/.test(t) && /\bfrom\b/.test(t)) return 'typescript';
+    if (/\bfunction\b|=>/.test(t)) return 'javascript';
+    if (/\bdef\b.*:/.test(t)) return 'python';
+    if (/^\s*#include\b|\bstd::/.test(t)) return 'cpp';
+    if (/^\s*class\b.*{/.test(t)) return 'java';
+    if (/^\s*SELECT\b|\bFROM\b/.test(t)) return 'sql';
+    return 'plaintext';
+  };
+
+  const lang = language || inferLanguage(content);
 
   const handleCopy = () => {
     if (isCopied) return;

@@ -1,5 +1,6 @@
-
 import React from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import CodeBlock from './CodeBlock';
 
 interface MarkdownRendererProps {
@@ -7,104 +8,81 @@ interface MarkdownRendererProps {
 }
 
 const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
-  const renderContent = () => {
-    const lines = content.split('\n');
-    const elements: React.ReactNode[] = [];
-    let inCodeBlock = false;
-    let codeBlockContent = '';
-    let codeBlockLanguage = '';
-    let listItems: string[] = [];
-
-    const flushList = () => {
-      if (listItems.length > 0) {
-        elements.push(
-          <ul key={`ul-${elements.length}`} className="list-disc list-inside space-y-1 my-3">
-            {listItems.map((item, index) => <li key={index}>{parseInline(item)}</li>)}
-          </ul>
-        );
-        listItems = [];
-      }
+  const normalizeLang = (lang?: string) => {
+    const l = (lang || '').toLowerCase();
+    const map: Record<string, string> = {
+      js: 'javascript',
+      jsx: 'jsx',
+      ts: 'typescript',
+      tsx: 'tsx',
+      py: 'python',
+      sh: 'bash',
+      shell: 'bash',
+      yml: 'yaml',
+      md: 'markdown',
+      html: 'markup',
     };
-    
-    const flushCodeBlock = () => {
-        if (codeBlockContent) {
-            elements.push(
-                <CodeBlock 
-                  key={`code-${elements.length}`} 
-                  language={codeBlockLanguage} 
-                  content={codeBlockContent.trimEnd()}
-                />
-              );
-            codeBlockContent = '';
-            codeBlockLanguage = '';
-        }
-    }
-
-    const parseInline = (text: string) => {
-      const parts = text
-        .split(/(\*\*.*?\*\*|`.*?`)/g)
-        .map((part, i) => {
-          if (part.startsWith('**') && part.endsWith('**')) {
-            return <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>;
-          }
-          if (part.startsWith('`') && part.endsWith('`')) {
-            return <code key={i} className="bg-surface-light text-accent px-1.5 py-0.5 rounded text-sm font-mono">{part.slice(1, -1)}</code>;
-          }
-          return part;
-        });
-      return <>{parts}</>;
-    };
-
-    lines.forEach((line, index) => {
-      if (line.startsWith('```')) {
-        flushList();
-        if (inCodeBlock) {
-          flushCodeBlock();
-        } else {
-            codeBlockLanguage = line.substring(3).trim();
-        }
-        inCodeBlock = !inCodeBlock;
-        return;
-      }
-
-      if (inCodeBlock) {
-        codeBlockContent += line + '\n';
-        return;
-      }
-
-      if (line.startsWith('# ')) {
-        flushList();
-        elements.push(<h1 key={index} className="text-2xl font-bold mt-6 mb-3 border-b-2 border-glass pb-2">{parseInline(line.substring(2))}</h1>);
-        return;
-      }
-      if (line.startsWith('## ')) {
-        flushList();
-        elements.push(<h2 key={index} className="text-xl font-bold mt-5 mb-2 border-b border-glass pb-1">{parseInline(line.substring(3))}</h2>);
-        return;
-      }
-      if (line.startsWith('### ')) {
-        flushList();
-        elements.push(<h3 key={index} className="text-lg font-semibold mt-4 mb-2">{parseInline(line.substring(4))}</h3>);
-        return;
-      }
-      
-      if (line.trim().startsWith('* ') || line.trim().startsWith('- ')) {
-        listItems.push(line.trim().substring(2));
-      } else {
-        flushList();
-        if (line.trim() !== '') {
-            elements.push(<p key={index} className="mb-3">{parseInline(line)}</p>);
-        }
-      }
-    });
-    
-    flushList();
-    flushCodeBlock();
-
-    return elements;
+    return map[l] || l;
   };
 
-  return <div className="prose prose-invert max-w-none text-primary break-words">{renderContent()}</div>;
+  return (
+    <div className="prose prose-invert max-w-none text-primary break-words">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          code({ inline, className, children, ...props }: any) {
+            const match = /language-([\w-]+)/.exec(className || '');
+            const raw = match ? match[1] : '';
+            const lang = normalizeLang(raw);
+            if (inline) {
+              return (
+                <code className="bg-surface-light text-accent px-1.5 py-0.5 rounded text-sm font-mono" {...props}>
+                  {children}
+                </code>
+              );
+            }
+            return (
+              <CodeBlock language={lang} content={String(children)} />
+            );
+          },
+          table({ children }) {
+            return (
+              <div className="my-4 overflow-x-auto">
+                <table className="w-full border-collapse text-sm">
+                  {children}
+                </table>
+              </div>
+            );
+          },
+          thead({ children }) {
+            return <thead className="bg-surface-light/50">{children}</thead>;
+          },
+          th({ children }) {
+            return (
+              <th className="border border-glass px-3 py-2 text-left font-semibold text-secondary">
+                {children}
+              </th>
+            );
+          },
+          td({ children }) {
+            return <td className="border border-glass px-3 py-2 align-top">{children}</td>;
+          },
+          tr({ children }) {
+            return <tr className="even:bg-surface/40">{children}</tr>;
+          },
+          a({ href, children }) {
+            return (
+              <a href={href} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                {children}
+              </a>
+            );
+          },
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
 };
 
 export default MarkdownRenderer;
