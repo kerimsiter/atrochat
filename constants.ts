@@ -17,7 +17,7 @@ export const TOKEN_ESTIMATE_FACTOR = 4;
 export const CONTEXT_WINDOW_LIMIT = 1000000;
 
 // Pricing for gemini-2.5-flash (hypothetical, based on similar models)
-// Prices are per 1,000,000 tokens
+// Prices are per 1,000,000 tokenss
 export const COST_PER_MILLION_TOKENS = {
   INPUT: 0.35,
   OUTPUT: 0.70,

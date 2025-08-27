@@ -421,6 +421,9 @@ ${transcript}
         messages: [...updatedMessages, initialModelMessage],
         files: [],
         isContextStale: false,
+        // Commit SHA'yı, güncelleme gerçekten AI'a gönderildiği anda güncelle
+        projectCommitSha: pendingUpdate?.newCommitSha ?? s.projectCommitSha,
+        // pending güncellemeyi tükettik
         pendingContextUpdate: undefined,
       } : s),
     });
@@ -657,12 +660,13 @@ ${transcript}
         return {
           ...s,
           projectFiles: updatedFiles,
-          projectCommitSha: newCommitSha,
+          // Commit SHA'yı hemen güncelleme; bir sonraki mesajda AI'a bağlam aktarılırken güncelleyeceğiz
           projectTokenCount: newProjectTokenCount,
           pendingContextUpdate: {
             added: addedFiles,
             modified: modifiedFiles,
             removed: removedPaths,
+            newCommitSha: newCommitSha,
           },
           messages: [...s.messages, systemMessage],
         } as ChatSession;
