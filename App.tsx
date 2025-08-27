@@ -9,7 +9,7 @@ import { SettingsIcon, BotIcon, GitHubIcon, SyncIcon, MenuIcon } from './compone
 import SettingsModal from './components/ApiKeyModal';
 import GitHubRepoModal from './components/GitHubRepoModal';
 import TokenUsageDisplay from './components/TokenUsageDisplay';
-import { GEMINI_MODELS } from './constants';
+import { GEMINI_MODELS, SUMMARY_THRESHOLD } from './constants';
 import { useChatStore } from './store/chatStore';
 import { useAutoScroll } from './hooks/useAutoScroll';
 import FileContentModal from './components/FileContentModal';
@@ -20,6 +20,7 @@ const App: React.FC = () => {
     sessions,
     activeSessionId,
     isLoading,
+    isSummarizing,
     isSyncing,
     isHydrating,
     sendMessage,
@@ -31,6 +32,7 @@ const App: React.FC = () => {
     syncRepo,
     deleteMessage,
     editMessage,
+    summarizeAndContinueChat,
     geminiApiKey,
     githubToken,
     selectedModel,
@@ -55,6 +57,8 @@ const App: React.FC = () => {
   }, [geminiApiKey]);
 
   const activeSession = sessions.find(s => s.id === activeSessionId) || null;
+  const totalContextTokens = (activeSession?.projectTokenCount || 0) + (activeSession?.historyTokenCount || 0);
+  const showSummaryButton = totalContextTokens >= SUMMARY_THRESHOLD;
 
   const chatInputRef = useRef<ChatInputRef>(null);
   const { scrollContainerRef, scrollToBottomIfNear } = useAutoScroll(activeSession?.messages.length ?? 0, { streaming: isLoading });
@@ -194,12 +198,24 @@ const App: React.FC = () => {
                   </button>
                 </div>
             </header>
+            {showSummaryButton && (
+              <div className="px-4 py-3 border-b border-glass glass-surface text-sm text-secondary flex items-center justify-between">
+                <span>Sohbet bağlamı oldukça uzadı. Yeni bir sohbete özetleyerek devam etmek isteyebilirsiniz.</span>
+                <button
+                  onClick={summarizeAndContinueChat}
+                  disabled={isSummarizing}
+                  className="ml-4 bg-accent-darker hover:bg-accent-dark text-primary font-semibold px-3 py-1.5 rounded disabled:bg-surface-lighter disabled:cursor-not-allowed transition-colors"
+                >
+                  {isSummarizing ? 'Özetleniyor…' : 'Özetleyerek yeni sohbete devam et'}
+                </button>
+              </div>
+            )}
             <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4" style={{ overflowAnchor: 'none' }}>
                 {activeSession.messages.map((msg) => (
                     <MessageBubble key={msg.id} message={msg} onDelete={deleteMessage} onEdit={editMessage} />
                 ))}
             </div>
-            <ChatInput ref={chatInputRef} onSendMessage={sendMessage} isLoading={isLoading} onStop={stopGeneration} onFocus={scrollToBottomIfNear} />
+            <ChatInput ref={chatInputRef} onSendMessage={sendMessage} isLoading={isLoading || isSummarizing} onStop={stopGeneration} onFocus={scrollToBottomIfNear} />
           </>
         ) : (
           renderWelcomeScreen()

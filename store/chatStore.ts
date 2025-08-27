@@ -18,6 +18,7 @@ interface ChatState {
   isHydrating: boolean;
   isSyncing: boolean;
   isGeneratingInstruction: boolean;
+  isSummarizing: boolean;
   geminiApiKey: string;
   githubToken: string;
   selectedModel?: string;
@@ -32,6 +33,7 @@ interface ChatActions {
   setSelectedModel: (model?: string) => void;
   setSystemInstruction: (instruction: string) => void;
   generateSystemInstruction: () => Promise<void>;
+  summarizeAndContinueChat: () => Promise<void>;
   startNewChat: () => void;
   selectChat: (sessionId: string) => void;
   deleteChat: (sessionId: string) => void;
@@ -72,6 +74,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   isHydrating: true,
   isSyncing: false,
   isGeneratingInstruction: false,
+  isSummarizing: false,
   geminiApiKey: localStorage.getItem('geminiApiKey') || '',
   githubToken: localStorage.getItem('githubToken') || localStorage.getItem('githubPat') || '',
   selectedModel: localStorage.getItem('selectedModel') || localStorage.getItem('selectedGeminiModel') || undefined,
@@ -107,6 +110,84 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       set({ sessions: [s], activeSessionId: s.id });
     } finally {
       set({ isHydrating: false });
+    }
+  },
+
+  summarizeAndContinueChat: async () => {
+    const { activeSessionId, sessions, geminiApiKey, selectedModel } = get();
+    if (!activeSessionId) return;
+    const current = sessions.find(s => s.id === activeSessionId);
+    if (!current) return;
+    if (!geminiApiKey) {
+      const errorMessage: Message = {
+        id: `msg-${Date.now()}`,
+        role: Role.SYSTEM,
+        content: 'Özetleme için Gemini API anahtarı gerekli. Lütfen Ayarlar’dan ekleyin.',
+        timestamp: new Date().toISOString(),
+      };
+      set({ sessions: sessions.map(s => s.id === activeSessionId ? { ...s, messages: [...s.messages, errorMessage] } : s) });
+      return;
+    }
+    set({ isSummarizing: true });
+    try {
+      // 1) Sohbeti transkripte çevir (yalnızca USER/MODEL)
+      const transcript = current.messages
+        .filter(m => m.role === Role.USER || m.role === Role.MODEL)
+        .map(m => `${m.role === Role.USER ? 'Kullanıcı' : 'Asistan'}: ${((m as any).apiContent || m.content).trim()}`)
+        .join('\n');
+
+      // 2) Özetleme prompt'u
+      const prompt = `Aşağıdaki uzun sohbet geçmişini, mevcut teknik konu ve alınan kararları kaybetmeden kısa ve eyleme dönük bir özete dönüştür.
+
+İstekler:
+- Türkçe yaz.
+- 6-12 madde arasında, net ve başlık/alt başlıklarla düzenli bir özet oluştur.
+- Son konuşulan konu, açık kalan sorular, alınmış kararlar ve bir sonraki adımlar mutlaka yer alsın.
+- Gerekirse kod bloklarıyla çok kısa örnek ver; gereksiz ayrıntıya girme.
+
+Sohbet Geçmişi (özetle):
+"""
+${transcript}
+"""
+
+Çıktı:
+- Sadece özet metnini döndür. Kullanıcıya gösterilecek SYSTEM mesajı şeklinde, kısa bir giriş cümlesiyle başla (örn. "Önceki sohbetin özeti ve devam bağlamı") ve ardından maddeleri listele.`;
+
+      // 3) Model çağrısı
+      const summary = await generateSingleResponse(geminiApiKey, prompt, selectedModel);
+      const summaryText = (summary || '').trim();
+
+      // 4) Yeni oturum oluştur ve bağlamı taşı
+      const newSession = createInitialSession();
+      newSession.title = (current.title || 'Sohbet') + ' (Devamı)';
+      newSession.projectFiles = current.projectFiles ? [...current.projectFiles] : [];
+      newSession.projectTokenCount = current.projectTokenCount || 0;
+      (newSession as any).projectRepoUrl = (current as any).projectRepoUrl;
+      (newSession as any).projectCommitSha = (current as any).projectCommitSha;
+      newSession.isContextStale = true; // İlk mesajla proje bağlamını yeniden taşıyabilmek için
+
+      // 5) Özeti yeni oturuma SYSTEM mesajı olarak ekle
+      const systemSummary: Message = {
+        id: `msg-${Date.now()}`,
+        role: Role.SYSTEM,
+        content: summaryText.length > 0 ? summaryText : 'Özet oluşturulamadı. Mevcut sohbetten devam edebilirsiniz.',
+        timestamp: new Date().toISOString(),
+      };
+      newSession.messages = [systemSummary];
+
+      // 6) State güncelle
+      set((state) => ({ sessions: [newSession, ...state.sessions], activeSessionId: newSession.id }));
+    } catch (error) {
+      console.error('Özetleme hatası:', error);
+      const errorMessage: Message = {
+        id: `msg-${Date.now()}`,
+        role: Role.SYSTEM,
+        content: 'Sohbet özetlenirken bir hata oluştu.',
+        timestamp: new Date().toISOString(),
+      };
+      set({ sessions: get().sessions.map(s => s.id === activeSessionId ? { ...s, messages: [...s.messages, errorMessage] } : s) });
+    } finally {
+      set({ isSummarizing: false });
     }
   },
 
