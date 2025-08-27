@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { ChatSession, Message, Role, FileContent, UrlContextMetadata, Attachment } from '../types';
-import { getGeminiChatStream } from '../services/geminiService';
+import { getGeminiChatStream, generateSingleResponse, countTokens } from '../services/geminiService';
 import { syncRepoChanges } from '../services/githubService';
 import { TOKEN_ESTIMATE_FACTOR, COST_PER_MILLION_TOKENS, DEFAULT_SYSTEM_INSTRUCTION } from '../constants';
 import type { Content, Part } from '@google/genai';
@@ -17,6 +17,7 @@ interface ChatState {
   isLoading: boolean;
   isHydrating: boolean;
   isSyncing: boolean;
+  isGeneratingInstruction: boolean;
   geminiApiKey: string;
   githubToken: string;
   selectedModel?: string;
@@ -30,6 +31,7 @@ interface ChatActions {
   setApiKeys: (keys: { gemini: string; github: string }) => void;
   setSelectedModel: (model?: string) => void;
   setSystemInstruction: (instruction: string) => void;
+  generateSystemInstruction: () => Promise<void>;
   startNewChat: () => void;
   selectChat: (sessionId: string) => void;
   deleteChat: (sessionId: string) => void;
@@ -69,6 +71,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   isLoading: false,
   isHydrating: true,
   isSyncing: false,
+  isGeneratingInstruction: false,
   geminiApiKey: localStorage.getItem('geminiApiKey') || '',
   githubToken: localStorage.getItem('githubToken') || localStorage.getItem('githubPat') || '',
   selectedModel: localStorage.getItem('selectedModel') || localStorage.getItem('selectedGeminiModel') || undefined,
@@ -125,6 +128,53 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     try { localStorage.setItem('systemInstruction', instruction); } catch {}
   },
 
+  generateSystemInstruction: async () => {
+    const { activeSessionId, sessions, geminiApiKey, selectedModel } = get();
+    if (!activeSessionId) return;
+    const session = sessions.find(s => s.id === activeSessionId);
+    if (!session) return;
+    const projectFiles = session.projectFiles || [];
+    if (!geminiApiKey) {
+      console.warn('Gemini API anahtarı eksik.');
+      return;
+    }
+    if (projectFiles.length === 0) {
+      console.warn('Proje dosyaları yok.');
+      return;
+    }
+    set({ isGeneratingInstruction: true });
+    try {
+      const filesBrief = projectFiles
+        .slice(0, 20) // aşırı uzunluk riskini azaltmak için sınırla
+        .map(f => `- ${f.path} (${Math.ceil(f.content.length/ TOKEN_ESTIMATE_FACTOR)} ~tokens)`)
+        .join('\n');
+
+      const sampleContent = projectFiles
+        .slice(0, 6)
+        .map(f => `--- DOSYA: ${f.path} ---\n\u0060\u0060\u0060\n${f.content.substring(0, 2000)}\n\u0060\u0060\u0060`)
+        .join('\n\n');
+
+      const prompt = `Bir sohbet asistanı için proje-özgü ve kısa bir Sistem Talimatı yaz.\n\nHedefler:\n- Projenin kod yapısını ve teknolojilerini anla.\n- Yanıtlarda kısa ve eyleme dönük ol.\n- Karmaşık görevlerde önce 2-5 maddelik mini plan yaz, sonra cevabı ver.\n- Kod yanıtlarda uygun dil ve stil kurallarını uygula.\n- Gereksiz jargondan kaçın, Türkçe yanıt ver.\n\nKısıtlar:\n- 250-500 kelime arası tut.\n- Gerektiğinde few-shot tarzı küçük bir örnek ekleyebilirsin.\n- Güvenlik ve gizlilik: gizli anahtarları asla isteme veya loglama.\n\nProje Dosya Özeti:\n${filesBrief}\n\nÖrnek İçerikler:\n${sampleContent}\n\nÇıktı: Sadece sistem talimatı metnini döndür.`;
+
+      const result = await generateSingleResponse(geminiApiKey, prompt, selectedModel);
+      if (result && result.trim().length > 0) {
+        set({ systemInstruction: result.trim() });
+        try { localStorage.setItem('systemInstruction', result.trim()); } catch {}
+      }
+    } catch (error) {
+      console.error('Sistem talimatı oluşturulamadı:', error);
+      const errorMessage: Message = {
+        id: `msg-${Date.now()}`,
+        role: Role.SYSTEM,
+        content: 'AI ile sistem talimatı oluşturulurken bir hata oluştu.',
+        timestamp: new Date().toISOString(),
+      };
+      set({ sessions: get().sessions.map(s => s.id === activeSessionId ? { ...s, messages: [...s.messages, errorMessage] } : s) });
+    } finally {
+      set({ isGeneratingInstruction: false });
+    }
+  },
+
   startNewChat: () => {
     const s = createInitialSession();
     set((state) => ({ sessions: [s, ...state.sessions], activeSessionId: s.id }));
@@ -153,6 +203,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const current = sessions.find((s) => s.id === activeSessionId);
     if (!current) return;
 
+    // Hızlı gösterim için tahmini token sayımı
     const projectTokenCount = files.reduce((acc, f) => acc + estimateTokens(f.content), 0);
     const systemMessage: Message = {
       id: `msg-${Date.now()}`,
@@ -173,6 +224,20 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         messages: [...s.messages, systemMessage],
       } : s)),
     });
+
+    // Arka planda kesin token sayımı (tek çağrı için içerikleri birleştir)
+    (async () => {
+      try {
+        const apiKey = get().geminiApiKey;
+        const model = get().selectedModel;
+        if (!apiKey) return;
+        const joined = files.map(f => f.content).join('\n');
+        const precise = await countTokens(apiKey, joined, model);
+        set({
+          sessions: get().sessions.map(s => s.id === activeSessionId ? { ...s, projectTokenCount: precise } : s)
+        });
+      } catch {}
+    })();
   },
 
   // Implemented actions migrated from useChatManager
@@ -307,7 +372,21 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       });
     }
 
-    const inputTokens = estimateTokens(finalPartsForApi.map(p => 'text' in p ? (p as any).text : '').join(''));
+    // Kesin giriş token sayımı (mümkünse)
+    let inputTokens = estimateTokens(finalPartsForApi.map(p => 'text' in p ? (p as any).text : '').join(''));
+    try {
+      const apiKey = get().geminiApiKey;
+      const model = get().selectedModel;
+      if (apiKey) {
+        const inputText = finalPartsForApi
+          .map(p => (p as any).text)
+          .filter(Boolean)
+          .join('');
+        if (inputText.length > 0) {
+          inputTokens = await countTokens(apiKey, inputText, model);
+        }
+      }
+    } catch {}
     const inputCost = (inputTokens / 1_000_000) * COST_PER_MILLION_TOKENS.INPUT;
     set({
       sessions: get().sessions.map(s => s.id === activeSessionId ? {
@@ -399,7 +478,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     } finally {
       currentStream = null;
       currentAbort = null;
-      const outputTokens = estimateTokens(modelResponse);
+      // Kesin çıkış token sayımı (mümkünse)
+      let outputTokens = estimateTokens(modelResponse);
+      try {
+        const apiKey = get().geminiApiKey;
+        const model = get().selectedModel;
+        if (apiKey && modelResponse.trim().length > 0) {
+          outputTokens = await countTokens(apiKey, modelResponse, model);
+        }
+      } catch {}
       const outputCost = (outputTokens / 1_000_000) * COST_PER_MILLION_TOKENS.OUTPUT;
       set({
         sessions: get().sessions.map(s => s.id === activeSessionId ? {

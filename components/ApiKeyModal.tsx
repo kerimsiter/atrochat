@@ -2,13 +2,22 @@
 import React, { useEffect, useState } from 'react';
 import { KeyIcon, GitHubIcon, BotIcon } from './icons';
 import { useChatStore } from '../store/chatStore';
+import { DEFAULT_SYSTEM_INSTRUCTION } from '../constants';
 
 interface SettingsModalProps {
   onClose: () => void;
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
-  const { geminiApiKey: storedGeminiKey, githubToken: storedGithubToken, systemInstruction: storedInstruction, setApiKeys, setSystemInstruction } = useChatStore();
+  const {
+    geminiApiKey: storedGeminiKey,
+    githubToken: storedGithubToken,
+    systemInstruction: storedInstruction,
+    isGeneratingInstruction,
+    generateSystemInstruction,
+    setApiKeys,
+    setSystemInstruction,
+  } = useChatStore();
   const [geminiApiKey, setGeminiApiKey] = useState(storedGeminiKey || '');
   const [githubToken, setGithubToken] = useState(storedGithubToken || '');
   const [systemInstruction, setSystemInstructionLocal] = useState(storedInstruction || '');
@@ -53,9 +62,33 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
 
           {/* System Instruction Section (compact) */}
           <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <BotIcon className="w-5 h-5 text-secondary" />
-              <h3 className="text-base font-semibold text-primary">Sistem Talimatı</h3>
+            <div className="flex items-center gap-2 justify-between">
+              <div className="flex items-center gap-2">
+                <BotIcon className="w-5 h-5 text-secondary" />
+                <h3 className="text-base font-semibold text-primary">Sistem Talimatı</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={generateSystemInstruction}
+                  disabled={isGeneratingInstruction || !geminiApiKey.trim()}
+                  className="text-xs bg-accent-darker text-primary font-semibold py-1 px-2 rounded-md hover:bg-accent-dark disabled:bg-surface-lighter disabled:text-secondary/60 disabled:cursor-not-allowed transition-colors"
+                  aria-busy={isGeneratingInstruction}
+                  aria-label="AI ile sistem talimatı oluştur"
+                  title="Proje dosyalarına göre sistem talimatını AI ile oluştur"
+                >
+                  {isGeneratingInstruction ? 'Oluşturuluyor…' : '✨ AI ile Oluştur'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setSystemInstructionLocal(DEFAULT_SYSTEM_INSTRUCTION); setSystemInstruction(DEFAULT_SYSTEM_INSTRUCTION); }}
+                  disabled={isGeneratingInstruction}
+                  className="text-xs bg-surface-light text-primary font-semibold py-1 px-2 rounded-md hover:bg-surface-lighter border border-glass disabled:text-secondary/60 disabled:cursor-not-allowed transition-colors"
+                  title="Varsayılan sistem talimatına dön"
+                >
+                  Varsayılana Sıfırla
+                </button>
+              </div>
             </div>
             <label htmlFor="system_instruction" className="sr-only">Sistem Talimatı</label>
             <textarea

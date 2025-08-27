@@ -35,20 +35,20 @@ export const getGeminiChatStream = async (
 
     const tools: any[] = [];
     if (useUrlContext) {
-        tools.push({urlContext: {}});
+      tools.push({ urlContext: {} });
     }
     if (useGoogleSearch) {
-        tools.push({googleSearch: {}});
+      tools.push({ googleSearch: {} });
     }
 
     const config: any = {
-        thinkingConfig: {
-            includeThoughts: true,
-        },
+      thinkingConfig: {
+        includeThoughts: true,
+      },
     };
 
     if (tools.length > 0) {
-        config.tools = tools;
+      config.tools = tools;
     }
 
     const request: any = {
@@ -63,9 +63,7 @@ export const getGeminiChatStream = async (
 
     const response = await ai.models.generateContentStream(request);
     return response;
-  }
- catch (error)
- {
+  } catch (error) {
     console.error("Error creating Gemini stream:", error);
     // The error will propagate up and be handled in the UI.
     throw error;
@@ -92,5 +90,29 @@ export const countTokens = async (
   } catch (error) {
     console.error('Token sayımı hatası, tahmine geri dönülüyor:', error);
     return Math.ceil(text.length / 4);
+  }
+};
+
+/**
+ * Sends a single prompt to Gemini and gets a non-streaming text response.
+ * Useful for generating project-specific system instructions.
+ */
+export const generateSingleResponse = async (
+  apiKey: string,
+  prompt: string,
+  model?: string
+): Promise<string> => {
+  try {
+    const ai = getAiClient(apiKey);
+    const response: any = await (ai as any).models.generateContent({
+      model: model || GEMINI_MODEL,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    });
+    const text = response?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (typeof text === 'string') return text;
+    throw new Error('API yanıtından metin içeriği alınamadı.');
+  } catch (error) {
+    console.error('Error generating single response:', error);
+    throw error;
   }
 };
