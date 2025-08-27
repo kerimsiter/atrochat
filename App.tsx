@@ -12,6 +12,7 @@ import TokenUsageDisplay from './components/TokenUsageDisplay';
 import { GEMINI_MODELS } from './constants';
 import { useChatStore } from './store/chatStore';
 import { useAutoScroll } from './hooks/useAutoScroll';
+import FileContentModal from './components/FileContentModal';
 
 const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -35,6 +36,10 @@ const App: React.FC = () => {
     selectedModel,
     setSelectedModel,
     hydrate,
+    viewingFile,
+    isFileViewerOpen,
+    openFileViewer,
+    closeFileViewer,
   } = useChatStore();
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
   const [showGitHubModal, setShowGitHubModal] = useState<boolean>(false);
@@ -110,6 +115,7 @@ const App: React.FC = () => {
     <div className="flex h-screen font-sans">
       {showSettingsModal && <SettingsModal onClose={() => setShowSettingsModal(false)} />}
       {showGitHubModal && <GitHubRepoModal onLoad={handleLoadRepo} onClose={() => setShowGitHubModal(false)} isLoading={isRepoLoading} />}
+      {isFileViewerOpen && <FileContentModal file={viewingFile} onClose={closeFileViewer} />}
       <Sidebar
         isOpen={isSidebarOpen}
         onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -120,6 +126,7 @@ const App: React.FC = () => {
         onDeleteChat={deleteChat}
         projectFiles={activeSession?.projectFiles}
         onFileSelect={handleFileSelect}
+        onFileView={openFileViewer}
       />
       
       <main className="flex-1 flex flex-col h-screen min-w-0">

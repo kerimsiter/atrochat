@@ -14,9 +14,10 @@ interface SidebarProps {
   onDeleteChat: (id: string) => void;
   projectFiles: FileContent[] | undefined;
   onFileSelect: (filePath: string) => void;
+  onFileView?: (filePath: string) => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, sessions, activeSessionId, onNewChat, onSelectChat, onDeleteChat, projectFiles, onFileSelect }) => {
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, sessions, activeSessionId, onNewChat, onSelectChat, onDeleteChat, projectFiles, onFileSelect, onFileView }) => {
   const filePaths = projectFiles?.map(f => f.path) || [];
 
   return (
@@ -64,7 +65,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, sessions, activeSes
         {filePaths.length > 0 && (
           <div className="mt-4 pt-4 border-t border-glass flex-shrink-0 max-h-64 overflow-y-auto">
               <h2 className="text-xs font-semibold text-secondary uppercase tracking-wider mb-2">Proje Dosyaları</h2>
-              <FileTree paths={filePaths} onFileSelect={onFileSelect} />
+              <FileTree paths={filePaths} onFileSelect={onFileSelect} onFileView={onFileView} />
           </div>
         )}
 

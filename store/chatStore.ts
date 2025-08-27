@@ -21,6 +21,8 @@ interface ChatState {
   githubToken: string;
   selectedModel?: string;
   systemInstruction: string;
+  viewingFile: FileContent | null;
+  isFileViewerOpen: boolean;
 }
 
 interface ChatActions {
@@ -37,6 +39,8 @@ interface ChatActions {
   syncRepo: () => Promise<void>;
   deleteMessage: (messageId: string) => void;
   editMessage: (messageId: string, newContent: string) => void;
+  openFileViewer: (filePath: string) => void;
+  closeFileViewer: () => void;
 }
 
 export type ChatStore = ChatState & ChatActions;
@@ -69,6 +73,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   githubToken: localStorage.getItem('githubToken') || localStorage.getItem('githubPat') || '',
   selectedModel: localStorage.getItem('selectedModel') || localStorage.getItem('selectedGeminiModel') || undefined,
   systemInstruction: localStorage.getItem('systemInstruction') || DEFAULT_SYSTEM_INSTRUCTION,
+  viewingFile: null,
+  isFileViewerOpen: false,
 
   // Actions
   hydrate: () => {
@@ -544,6 +550,19 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     // defer resend via a minimal flag in state if needed; for now this action truncates history.
     // A follow-up UI action should call sendMessage(newContent, originalAttachments, false, false)
     // to resend the edited input.
+  },
+
+  openFileViewer: (filePath) => {
+    const { activeSessionId, sessions } = get();
+    if (!activeSessionId) return;
+    const current = sessions.find(s => s.id === activeSessionId);
+    if (!current || !current.projectFiles) return;
+    const file = current.projectFiles.find(f => f.path === filePath) || null;
+    if (file) set({ viewingFile: file, isFileViewerOpen: true });
+  },
+
+  closeFileViewer: () => {
+    set({ isFileViewerOpen: false, viewingFile: null });
   },
 }));
 

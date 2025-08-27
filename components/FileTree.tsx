@@ -4,6 +4,7 @@ import { FolderIcon, FileIcon, ChevronRightIcon } from './icons';
 interface FileTreeProps {
   paths: string[];
   onFileSelect: (path: string) => void;
+  onFileView?: (path: string) => void;
 }
 
 interface TreeNode {
@@ -34,15 +35,20 @@ const buildTree = (paths: string[]): TreeNode => {
   return root;
 };
 
-const TreeNodeComponent: React.FC<{ node: TreeNode; onFileSelect: (path: string) => void; level: number }> = ({ node, onFileSelect, level }) => {
+const TreeNodeComponent: React.FC<{ node: TreeNode; onFileSelect: (path: string) => void; onFileView?: (path: string) => void; level: number }> = ({ node, onFileSelect, onFileView, level }) => {
   const [isOpen, setIsOpen] = useState(false);
   const isFolder = !!node.children;
 
   const handleClick = () => {
-    // Satır tıklanınca: yolu referans olarak ekle, klasörse '/' ile gönder ve ayrıca aç/kapa
-    const refPath = isFolder ? `${node.path}/` : node.path;
-    onFileSelect(refPath);
-    if (isFolder) setIsOpen(!isOpen);
+    if (isFolder) {
+      // Klasör satırına tıklama: referans ekle (sonunda '/') ve aç/kapa
+      onFileSelect(`${node.path}/`);
+      setIsOpen(!isOpen);
+    } else {
+      // Dosya satırı: referans ekle + görüntüleyici aç
+      onFileSelect(node.path);
+      onFileView?.(node.path);
+    }
   };
 
   const sortedChildren = isFolder ? Object.values(node.children!).sort((a, b) => {
@@ -70,7 +76,7 @@ const TreeNodeComponent: React.FC<{ node: TreeNode; onFileSelect: (path: string)
       {isFolder && isOpen && (
         <div>
           {sortedChildren.map(child => (
-            <TreeNodeComponent key={child.path} node={child} onFileSelect={onFileSelect} level={level + 1} />
+            <TreeNodeComponent key={child.path} node={child} onFileSelect={onFileSelect} onFileView={onFileView} level={level + 1} />
           ))}
         </div>
       )}
@@ -78,7 +84,7 @@ const TreeNodeComponent: React.FC<{ node: TreeNode; onFileSelect: (path: string)
   );
 };
 
-const FileTree: React.FC<FileTreeProps> = ({ paths, onFileSelect }) => {
+const FileTree: React.FC<FileTreeProps> = ({ paths, onFileSelect, onFileView }) => {
   const tree = useMemo(() => buildTree(paths), [paths]);
   const sortedRootChildren = Object.values(tree.children || {}).sort((a, b) => {
     const aIsFolder = !!a.children;
@@ -90,7 +96,7 @@ const FileTree: React.FC<FileTreeProps> = ({ paths, onFileSelect }) => {
   return (
     <div>
       {sortedRootChildren.map(node => (
-        <TreeNodeComponent key={node.path} node={node} onFileSelect={onFileSelect} level={0} />
+        <TreeNodeComponent key={node.path} node={node} onFileSelect={onFileSelect} onFileView={onFileView} level={0} />
       ))}
     </div>
   );
