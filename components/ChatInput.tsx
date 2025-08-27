@@ -8,13 +8,14 @@ interface ChatInputProps {
   onSendMessage: (message: string, attachments: Attachment[], useUrlAnalysis: boolean, useGoogleSearch: boolean) => void;
   isLoading: boolean;
   onStop?: () => void;
+  onFocus?: () => void;
 }
 
 export interface ChatInputRef {
   addFileReference: (filePath: string) => void;
 }
 
-const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({ onSendMessage, isLoading, onStop }, ref) => {
+const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({ onSendMessage, isLoading, onStop, onFocus }, ref) => {
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -197,8 +198,10 @@ const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({ onSendMessage, isL
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
+          onFocus={onFocus}
           placeholder="Mesajınızı yazın, dosya sürükleyin veya yapıştırın... (Shift+Enter yeni satır)"
-          className="w-full bg-surface-light text-primary rounded-lg p-4 pr-16 resize-none focus:ring-2 focus:ring-accent-dark focus:outline-none transition max-h-48 overflow-y-auto placeholder-secondary/70"
+          className="w-full bg-surface-light text-primary rounded-lg p-4 pr-16 resize-none focus:ring-2 focus:ring-accent-dark focus:outline-none max-h-48 overflow-y-auto placeholder-secondary/70"
+          style={{ minHeight: 48 }}
           rows={1}
           disabled={isLoading}
         />

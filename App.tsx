@@ -11,6 +11,7 @@ import GitHubRepoModal from './components/GitHubRepoModal';
 import TokenUsageDisplay from './components/TokenUsageDisplay';
 import { GEMINI_MODELS } from './constants';
 import { useChatStore } from './store/chatStore';
+import { useAutoScroll } from './hooks/useAutoScroll';
 
 const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -50,12 +51,11 @@ const App: React.FC = () => {
 
   const activeSession = sessions.find(s => s.id === activeSessionId) || null;
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<ChatInputRef>(null);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeSession?.messages, isLoading]);
+  const { scrollContainerRef, scrollToBottomIfNear } = useAutoScroll([
+    activeSession?.messages,
+    isLoading,
+  ], 100, { isStreaming: isLoading });
   
   const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newModel = e.target.value;
@@ -190,13 +190,12 @@ const App: React.FC = () => {
                   </button>
                 </div>
             </header>
-            <div className="flex-1 overflow-y-auto p-4">
+            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4">
                 {activeSession.messages.map((msg) => (
                     <MessageBubble key={msg.id} message={msg} onDelete={deleteMessage} onEdit={editMessage} />
                 ))}
-                <div ref={messagesEndRef} />
             </div>
-            <ChatInput ref={chatInputRef} onSendMessage={sendMessage} isLoading={isLoading} onStop={stopGeneration} />
+            <ChatInput ref={chatInputRef} onSendMessage={sendMessage} isLoading={isLoading} onStop={stopGeneration} onFocus={scrollToBottomIfNear} />
           </>
         ) : (
           renderWelcomeScreen()
