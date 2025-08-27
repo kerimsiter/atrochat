@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChatSession, Message, Role, FileContent, UrlContextMetadata, Attachment } from '../types';
 import { getGeminiChatStream } from '../services/geminiService';
 import { syncRepoChanges } from '../services/githubService';
-import { TOKEN_ESTIMATE_FACTOR, COST_PER_MILLION_TOKENS } from '../constants';
+import { TOKEN_ESTIMATE_FACTOR, COST_PER_MILLION_TOKENS, DEFAULT_SYSTEM_INSTRUCTION } from '../constants';
 import { Content, Part } from "@google/genai";
 
 const estimateTokens = (text: string) => Math.ceil(text.length / TOKEN_ESTIMATE_FACTOR);
@@ -419,12 +419,15 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
       const controller = new AbortController();
       currentAbortRef.current = controller;
 
+      const systemInstruction = localStorage.getItem('systemInstruction') || DEFAULT_SYSTEM_INSTRUCTION;
+
       const stream = await getGeminiChatStream(
         geminiApiKey,
         history,
         finalPartsForApi,
         useGoogleSearch,
         useUrlAnalysis,
+        systemInstruction,
         selectedModel,
         controller.signal
       );

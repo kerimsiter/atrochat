@@ -26,6 +26,7 @@ export const getGeminiChatStream = async (
   newParts: Part[],
   useGoogleSearch: boolean,
   useUrlContext: boolean,
+  systemInstruction?: string,
   model?: string,
   signal?: AbortSignal
 ): Promise<AsyncGenerator<GenerateContentResponse, any, unknown>> => {
@@ -50,11 +51,17 @@ export const getGeminiChatStream = async (
         config.tools = tools;
     }
 
-    const response = await ai.models.generateContentStream({
+    const request: any = {
       model: model || GEMINI_MODEL,
       contents: [...history, { role: Role.USER, parts: newParts }],
       config: config,
-    });
+    };
+
+    if (systemInstruction && typeof systemInstruction === 'string') {
+      request.systemInstruction = systemInstruction;
+    }
+
+    const response = await ai.models.generateContentStream(request);
     return response;
   }
  catch (error)
