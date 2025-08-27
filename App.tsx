@@ -6,19 +6,24 @@ import ChatInput, { ChatInputRef } from './components/ChatInput';
 import { useChatManager } from './hooks/useChatManager';
 import { fetchRepoContents } from './services/githubService';
 import { FileContent } from './types';
-import { FileIcon, SettingsIcon, BotIcon, GitHubIcon, SyncIcon } from './components/icons';
+import { SettingsIcon, BotIcon, GitHubIcon, SyncIcon, MenuIcon } from './components/icons';
 import SettingsModal from './components/ApiKeyModal';
 import GitHubRepoModal from './components/GitHubRepoModal';
 import TokenUsageDisplay from './components/TokenUsageDisplay';
 
 const App: React.FC = () => {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [geminiApiKey, setGeminiApiKey] = useState<string | null>(() => localStorage.getItem('geminiApiKey'));
   const [githubToken, setGithubToken] = useState<string | null>(() => localStorage.getItem('githubPat'));
-  //- Fix: Removed Gemini API key state to use environment variable instead.
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
   const [showGitHubModal, setShowGitHubModal] = useState<boolean>(false);
   const [isRepoLoading, setIsRepoLoading] = useState<boolean>(false);
 
-  //- Fix: Removed effect that checks for Gemini API key, as it's now handled by environment variables.
+  useEffect(() => {
+    if (!geminiApiKey) {
+      setShowSettingsModal(true);
+    }
+  }, [geminiApiKey]);
 
 
   const {
@@ -34,8 +39,7 @@ const App: React.FC = () => {
     syncRepo,
     deleteMessage,
     editMessage,
-    //- Fix: Pass API key from environment variables as per guidelines.
-  } = useChatManager(process.env.API_KEY, githubToken);
+  } = useChatManager(geminiApiKey, githubToken);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<ChatInputRef>(null);
@@ -44,8 +48,9 @@ const App: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeSession?.messages, isLoading]);
   
-  //- Fix: Settings handler now only manages the GitHub token.
-  const handleSaveSettings = (keys: { github: string }) => {
+  const handleSaveSettings = (keys: { gemini: string; github: string }) => {
+    localStorage.setItem('geminiApiKey', keys.gemini);
+    setGeminiApiKey(keys.gemini);
     localStorage.setItem('githubPat', keys.github);
     setGithubToken(keys.github);
     setShowSettingsModal(false);
@@ -100,10 +105,11 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen font-sans">
-      {/*-//- Fix: Updated SettingsModal props to remove Gemini API key management.*/}
-      {showSettingsModal && <SettingsModal onSave={handleSaveSettings} onClose={() => setShowSettingsModal(false)} currentGitHubToken={githubToken} />}
+      {showSettingsModal && <SettingsModal onSave={handleSaveSettings} onClose={() => setShowSettingsModal(false)} currentGeminiApiKey={geminiApiKey} currentGitHubToken={githubToken} />}
       {showGitHubModal && <GitHubRepoModal onLoad={handleLoadRepo} onClose={() => setShowGitHubModal(false)} isLoading={isRepoLoading} />}
       <Sidebar
+        isOpen={isSidebarOpen}
+        onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
         sessions={sessions}
         activeSessionId={activeSession?.id || null}
         onNewChat={startNewChat}
@@ -113,22 +119,29 @@ const App: React.FC = () => {
         onFileSelect={handleFileSelect}
       />
       
-      <main className="flex-1 flex flex-col h-screen">
+      <main className="flex-1 flex flex-col h-screen min-w-0">
         {activeSession ? (
           <>
             <header className="flex-shrink-0 flex items-center justify-between p-4 border-b border-glass glass-surface">
-                <div>
-                    <h1 className="text-lg font-semibold truncate pr-4 text-primary">{activeSession.title}</h1>
-                    {activeSession.projectRepoUrl && (
-                      <div className="flex items-center text-xs text-secondary mt-1">
-                        <GitHubIcon className="w-3.5 h-3.5 mr-1.5" />
-                        <a href={activeSession.projectRepoUrl} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                          {new URL(activeSession.projectRepoUrl).pathname.substring(1)}
-                        </a>
-                      </div>
+                <div className="flex items-center gap-2 min-w-0">
+                    {!isSidebarOpen && (
+                      <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 rounded-full text-secondary hover:text-primary hover:bg-surface-light transition-colors" aria-label="Kenar çubuğunu aç">
+                        <MenuIcon className="w-5 h-5" />
+                      </button>
                     )}
+                    <div className="min-w-0">
+                      <h1 className="text-lg font-semibold truncate pr-4 text-primary">{activeSession.title}</h1>
+                      {activeSession.projectRepoUrl && (
+                        <div className="flex items-center text-xs text-secondary mt-1">
+                          <GitHubIcon className="w-3.5 h-3.5 mr-1.5" />
+                          <a href={activeSession.projectRepoUrl} target="_blank" rel="noopener noreferrer" className="hover:underline truncate">
+                            {new URL(activeSession.projectRepoUrl).pathname.substring(1)}
+                          </a>
+                        </div>
+                      )}
+                    </div>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 flex-shrink-0">
                   {!activeSession.projectRepoUrl && (
                     <button
                         onClick={() => setShowGitHubModal(true)}

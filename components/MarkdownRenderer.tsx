@@ -1,3 +1,4 @@
+
 import React from 'react';
 import CodeBlock from './CodeBlock';
 
@@ -17,7 +18,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
     const flushList = () => {
       if (listItems.length > 0) {
         elements.push(
-          <ul key={`ul-${elements.length}`} className="list-disc list-inside space-y-1 my-2">
+          <ul key={`ul-${elements.length}`} className="list-disc list-inside space-y-1 my-3">
             {listItems.map((item, index) => <li key={index}>{parseInline(item)}</li>)}
           </ul>
         );
@@ -70,13 +71,29 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
         codeBlockContent += line + '\n';
         return;
       }
+
+      if (line.startsWith('# ')) {
+        flushList();
+        elements.push(<h1 key={index} className="text-2xl font-bold mt-6 mb-3 border-b-2 border-glass pb-2">{parseInline(line.substring(2))}</h1>);
+        return;
+      }
+      if (line.startsWith('## ')) {
+        flushList();
+        elements.push(<h2 key={index} className="text-xl font-bold mt-5 mb-2 border-b border-glass pb-1">{parseInline(line.substring(3))}</h2>);
+        return;
+      }
+      if (line.startsWith('### ')) {
+        flushList();
+        elements.push(<h3 key={index} className="text-lg font-semibold mt-4 mb-2">{parseInline(line.substring(4))}</h3>);
+        return;
+      }
       
       if (line.trim().startsWith('* ') || line.trim().startsWith('- ')) {
         listItems.push(line.trim().substring(2));
       } else {
         flushList();
         if (line.trim() !== '') {
-            elements.push(<p key={index}>{parseInline(line)}</p>);
+            elements.push(<p key={index} className="mb-3">{parseInline(line)}</p>);
         }
       }
     });
@@ -87,7 +104,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
     return elements;
   };
 
-  return <div className="prose prose-invert max-w-none text-primary">{renderContent()}</div>;
+  return <div className="prose prose-invert max-w-none text-primary break-words">{renderContent()}</div>;
 };
 
 export default MarkdownRenderer;

@@ -29,7 +29,7 @@ const TokenUsageDisplay: React.FC<TokenUsageDisplayProps> = ({ session }) => {
         <span>Bağlam: {contextTokens.toLocaleString()}</span>
         
         {/* Tooltip */}
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-obsidian border border-glass rounded-lg shadow-lg p-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-64 bg-obsidian border border-glass rounded-lg shadow-lg p-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
           <div className="font-semibold text-primary mb-2">Bağlam Kullanımı</div>
           <div className="w-full bg-surface-light rounded-full h-2.5 mb-2 overflow-hidden">
             <div className="flex h-2.5">

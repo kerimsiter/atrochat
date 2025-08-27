@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Message, Role, Attachment } from '../types';
 import { UserIcon, BotIcon, ClipboardIcon, CheckIcon, FileIcon, PencilIcon, TrashIcon } from './icons';
@@ -133,7 +134,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDelete, onEdit
   }
 
   const bubbleClasses = isUser
-    ? 'bg-accent-dark text-primary rounded-br-none'
+    ? 'bg-blue-600 text-primary rounded-br-none'
     : 'bg-surface-light text-primary rounded-bl-none';
   
   const containerClasses = isUser ? 'justify-end' : 'justify-start';

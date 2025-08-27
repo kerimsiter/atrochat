@@ -1,5 +1,6 @@
 
 
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChatSession, Message, Role, FileContent, UrlContextMetadata, Attachment } from '../types';
 import { getGeminiChatStream } from '../services/geminiService';
@@ -264,7 +265,7 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
       const errorMessage: Message = {
         id: `msg-${Date.now()}`,
         role: Role.MODEL,
-        content: "Gemini API anahtarı ayarlanmamış. Lütfen ortam değişkenlerinizi kontrol edin.",
+        content: "Gemini API anahtarı ayarlanmamış. Lütfen Ayarlar menüsünden anahtarınızı girin.",
         timestamp: new Date().toISOString(),
       };
       updateSession(activeSessionId, s => ({ messages: [...s.messages, errorMessage] }));
