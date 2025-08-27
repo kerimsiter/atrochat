@@ -71,3 +71,26 @@ export const getGeminiChatStream = async (
     throw error;
   }
 };
+
+// Counts tokens for given text using Gemini SDK if possible; falls back to estimation on error
+export const countTokens = async (
+  apiKey: string,
+  text: string,
+  model?: string
+): Promise<number> => {
+  try {
+    const ai = getAiClient(apiKey);
+    const response: any = await (ai as any).models.countTokens({
+      model: model || GEMINI_MODEL,
+      contents: [{ role: 'user', parts: [{ text }] }],
+    });
+    // Some SDK versions return { totalTokens }, others nest under usageMetadata
+    const total = (response && (response.totalTokens ?? response?.usageMetadata?.totalTokens));
+    if (typeof total === 'number') return total;
+    // Fallback if structure is unexpected
+    return Math.ceil(text.length / 4);
+  } catch (error) {
+    console.error('Token sayımı hatası, tahmine geri dönülüyor:', error);
+    return Math.ceil(text.length / 4);
+  }
+};

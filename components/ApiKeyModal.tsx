@@ -66,6 +66,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
               className="w-full bg-surface-light text-primary rounded-md px-3 py-2 h-20 resize-y focus:ring-2 focus:ring-accent-dark focus:outline-none transition placeholder-secondary/70 border border-glass text-sm"
               aria-label="Sistem Talimatı"
             />
+            <p className="text-xs text-secondary/70 mt-1">
+              Bu talimat her istekte gönderilir ve jeton maliyetini etkiler. Mümkün olduğunca kısa ve öz tutmaya çalışın.
+            </p>
           </div>
 
           {/* GitHub Token Section (compact) */}
