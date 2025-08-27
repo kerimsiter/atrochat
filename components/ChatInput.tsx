@@ -6,13 +6,14 @@ import { processFile } from '../utils/fileProcessor';
 interface ChatInputProps {
   onSendMessage: (message: string, attachments: Attachment[], useUrlAnalysis: boolean, useGoogleSearch: boolean) => void;
   isLoading: boolean;
+  onStop?: () => void;
 }
 
 export interface ChatInputRef {
     addFileReference: (filePath: string) => void;
 }
 
-const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({ onSendMessage, isLoading }, ref) => {
+const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({ onSendMessage, isLoading, onStop }, ref) => {
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -157,14 +158,26 @@ const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({ onSendMessage, isL
           rows={1}
           disabled={isLoading}
         />
-        <button
-          onClick={handleSubmit}
-          disabled={isLoading || (!input.trim() && attachments.length === 0)}
-          className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-accent-darker text-primary hover:bg-accent-dark disabled:bg-surface-lighter disabled:cursor-not-allowed transition-colors"
-          aria-label="Gönder"
-        >
-          <SendIcon className="w-5 h-5" />
-        </button>
+        {isLoading ? (
+          <button
+            onClick={onStop}
+            className="absolute right-4 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
+            aria-label="Durdur"
+            type="button"
+          >
+            Durdur
+          </button>
+        ) : (
+          <button
+            onClick={handleSubmit}
+            disabled={!input.trim() && attachments.length === 0}
+            className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-accent-darker text-primary hover:bg-accent-dark disabled:bg-surface-lighter disabled:cursor-not-allowed transition-colors"
+            aria-label="Gönder"
+            type="button"
+          >
+            <SendIcon className="w-5 h-5" />
+          </button>
+        )}
       </div>
       <div className="flex items-center justify-start mt-2.5 space-x-6 pl-12">
           <label htmlFor="url-analysis-toggle" className="flex items-center cursor-pointer select-none group">

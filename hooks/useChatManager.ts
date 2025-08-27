@@ -1,6 +1,3 @@
-
-
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChatSession, Message, Role, FileContent, UrlContextMetadata, Attachment } from '../types';
 import { getGeminiChatStream } from '../services/geminiService';
@@ -32,9 +29,14 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
   const [resendPayload, setResendPayload] = useState<{ content: string; attachments: Attachment[], useUrlAnalysis: boolean, useGoogleSearch: boolean } | null>(null);
   
   const sessionsRef = useRef(sessions);
+  const currentStreamRef = useRef<AsyncGenerator<any, any, unknown> | null>(null);
+  const currentModelMessageIdRef = useRef<string | null>(null);
+  const currentAbortRef = useRef<AbortController | null>(null);
   useEffect(() => {
     sessionsRef.current = sessions;
   }, [sessions]);
+
+  // Stop generation: defined after updateSession to avoid use-before-declaration
 
   useEffect(() => {
     try {
@@ -84,6 +86,30 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
       })
     );
   }, []);
+
+  // Stop generation: abort current stream and finalize UI state
+  const stopGeneration = useCallback(async () => {
+    if (!activeSessionId) return;
+    const gen = currentStreamRef.current;
+    if (gen && typeof gen.return === 'function') {
+      try { await gen.return(undefined); } catch { /* ignore */ }
+    }
+    currentStreamRef.current = null;
+    // Abort any ongoing network request
+    try { currentAbortRef.current?.abort(); } catch { /* ignore */ }
+    currentAbortRef.current = null;
+    setIsLoading(false);
+
+    const modelId = currentModelMessageIdRef.current;
+    if (!modelId) return;
+
+    updateSession(activeSessionId, (s) => ({
+      ...s,
+      messages: s.messages.map(m => (
+        m.id === modelId ? { ...m, isThinking: false } : m
+      )),
+    }));
+  }, [activeSessionId, updateSession]);
 
   const startNewChat = useCallback(() => {
     const newSession = createInitialSession();
@@ -314,6 +340,7 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
     };
 
     const modelMessageId = `msg-${Date.now() + 1}`;
+    currentModelMessageIdRef.current = modelMessageId;
     const initialModelMessage: Message = {
       id: modelMessageId,
       role: Role.MODEL,
@@ -385,14 +412,20 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
     let urlContextMetadata: UrlContextMetadata | undefined = undefined;
     
     try {
+      // Create a new abort controller for this request
+      const controller = new AbortController();
+      currentAbortRef.current = controller;
+
       const stream = await getGeminiChatStream(
         geminiApiKey,
         history,
         finalPartsForApi,
         useGoogleSearch,
         useUrlAnalysis,
-        selectedModel
+        selectedModel,
+        controller.signal
       );
+      currentStreamRef.current = stream;
       
       for await (const chunk of stream) {
         let chunkAnswer = '';
@@ -464,6 +497,10 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
            )
        }));
     } finally {
+        // Ensure current stream is cleared
+        currentStreamRef.current = null;
+        // Ensure abort controller is cleared
+        currentAbortRef.current = null;
         const outputTokens = estimateTokens(modelResponse);
         const outputCost = (outputTokens / 1_000_000) * COST_PER_MILLION_TOKENS.OUTPUT;
 
@@ -552,6 +589,7 @@ export const useChatManager = (geminiApiKey: string | null, githubToken: string 
     isLoading,
     isSyncing,
     sendMessage,
+    stopGeneration,
     startNewChat,
     selectChat,
     deleteChat,

@@ -26,7 +26,8 @@ export const getGeminiChatStream = async (
   newParts: Part[],
   useGoogleSearch: boolean,
   useUrlContext: boolean,
-  model?: string
+  model?: string,
+  signal?: AbortSignal
 ): Promise<AsyncGenerator<GenerateContentResponse, any, unknown>> => {
   try {
     const ai = getAiClient(apiKey);

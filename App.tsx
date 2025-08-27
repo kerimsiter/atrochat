@@ -36,6 +36,7 @@ const App: React.FC = () => {
     isLoading,
     isSyncing,
     sendMessage,
+    stopGeneration,
     startNewChat,
     selectChat,
     deleteChat,
@@ -196,7 +197,7 @@ const App: React.FC = () => {
                 ))}
                 <div ref={messagesEndRef} />
             </div>
-            <ChatInput ref={chatInputRef} onSendMessage={sendMessage} isLoading={isLoading} />
+            <ChatInput ref={chatInputRef} onSendMessage={sendMessage} isLoading={isLoading} onStop={stopGeneration} />
           </>
         ) : (
           renderWelcomeScreen()
