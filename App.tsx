@@ -52,10 +52,7 @@ const App: React.FC = () => {
   const activeSession = sessions.find(s => s.id === activeSessionId) || null;
 
   const chatInputRef = useRef<ChatInputRef>(null);
-  const { scrollContainerRef, scrollToBottomIfNear } = useAutoScroll([
-    activeSession?.messages,
-    isLoading,
-  ], 100, { isStreaming: isLoading });
+  const { scrollContainerRef, scrollToBottomIfNear } = useAutoScroll(activeSession?.messages, { streaming: isLoading });
   
   const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newModel = e.target.value;

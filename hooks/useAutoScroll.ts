@@ -1,18 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 
+type Options = {
+  threshold?: number;
+  streaming?: boolean; // İçerik hızlı büyürken smooth yerine auto kullan
+};
+
 // threshold: En alttan bu kadar piksel uzakta isek otomatik kaydır
-// dependencies: scroll'u tetiklemek istediğin durumlar (örn. [messages, isLoading])
-// isStreaming: true iken "auto" davranış kullanılır; smooth animasyon jitter yaratmasın diye
-export const useAutoScroll = (
-  dependencies: unknown[],
-  threshold = 100,
-  options?: { isStreaming?: boolean; throttleMs?: number; smoothOnStreamEnd?: boolean }
-) => {
+export const useAutoScroll = <T,>(dependency: T, options: Options = {}) => {
+  const { threshold = 100, streaming = false } = options;
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
   const lastScrollTop = useRef(0);
-  const lastSmoothAtRef = useRef(0);
-  const prevStreamingRef = useRef<boolean>(false);
+  const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -37,49 +36,30 @@ export const useAutoScroll = (
     return () => container.removeEventListener('scroll', handleScroll);
   }, [threshold]);
 
-  // Mesajlar/streaming değiştiğinde otomatik kaydır (kullanıcı yukarıda değilse)
+  // Mesajlar değiştiğinde otomatik kaydır (kullanıcı yukarıda değilse)
   useEffect(() => {
     if (isUserScrolling) return;
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    const now = Date.now();
-    let behavior: ScrollBehavior = 'smooth';
+    // Zaten dibe yakın değilsek zorla kaydırma (özellikle streaming sırasında zıplamaya yol açar)
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const distanceToBottom = scrollHeight - scrollTop - clientHeight;
+    if (distanceToBottom > threshold) return;
 
-    if (options?.isStreaming) {
-      const throttle = options?.throttleMs ?? 150;
-      if (now - lastSmoothAtRef.current < throttle) {
-        // Çok sık tetikleniyorsa, bu sefer kaydırmayı atla
-        return;
-      }
-      lastSmoothAtRef.current = now;
-      behavior = 'smooth';
-    } else {
-      // Streaming bitti: en sona nazikçe yerleş
-      behavior = 'smooth';
-    }
-
-    // Layout tamamlandıktan sonra kaydır
-    requestAnimationFrame(() => {
-      container.scrollTo({ top: container.scrollHeight, behavior });
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isUserScrolling, ...(dependencies || [])]);
-
-  // Streaming'den çıkarken son bir smooth kaydırma (isteğe bağlı)
-  useEffect(() => {
-    const isStreaming = !!options?.isStreaming;
-    const wasStreaming = prevStreamingRef.current;
-    prevStreamingRef.current = isStreaming;
-
-    if (wasStreaming && !isStreaming && options?.smoothOnStreamEnd !== false) {
-      const container = scrollContainerRef.current;
-      if (!container || isUserScrolling) return;
-      requestAnimationFrame(() => {
-        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    // Aynı frame içinde birden fazla kaydırmayı engelle
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: 'auto',
       });
-    }
-  }, [options?.isStreaming, isUserScrolling]);
+    });
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [dependency, isUserScrolling, streaming]);
 
   // Kullanıcı input'a geldiğinde dibe yakınsa dibe çek
   const scrollToBottomIfNear = () => {
@@ -89,7 +69,7 @@ export const useAutoScroll = (
     const distanceToBottom = scrollHeight - scrollTop - clientHeight;
 
     if (distanceToBottom <= threshold) {
-      container.scrollTo({ top: scrollHeight, behavior: 'smooth' });
+      container.scrollTo({ top: scrollHeight, behavior: 'auto' });
       setIsUserScrolling(false);
     }
   };

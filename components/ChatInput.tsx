@@ -200,8 +200,7 @@ const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({ onSendMessage, isL
           onPaste={handlePaste}
           onFocus={onFocus}
           placeholder="Mesajınızı yazın, dosya sürükleyin veya yapıştırın... (Shift+Enter yeni satır)"
-          className="w-full bg-surface-light text-primary rounded-lg p-4 pr-16 resize-none focus:ring-2 focus:ring-accent-dark focus:outline-none max-h-48 overflow-y-auto placeholder-secondary/70"
-          style={{ minHeight: 48 }}
+          className="w-full bg-surface-light text-primary rounded-lg p-4 pr-16 resize-none focus:ring-2 focus:ring-accent-dark focus:outline-none transition max-h-48 min-h-12 overflow-y-auto placeholder-secondary/70"
           rows={1}
           disabled={isLoading}
         />
