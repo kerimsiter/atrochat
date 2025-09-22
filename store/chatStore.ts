@@ -511,6 +511,30 @@ ${transcript}
       );
       currentStream = stream as any;
 
+      // Batch updates to reduce re-renders during streaming
+      let updateCounter = 0;
+      let lastUpdateTime = Date.now();
+      const UPDATE_THRESHOLD = 100; // Update every 100ms minimum
+      let pendingUpdate = false;
+      
+      const applyUpdate = () => {
+        set({
+          sessions: get().sessions.map(s => {
+            if (s.id !== activeSessionId) return s;
+            const updatedThinkingSteps = accumulatedThoughts
+              .split('\n')
+              .map(step => step.trim())
+              .filter(step => step !== '');
+            return {
+              ...s,
+              messages: s.messages.map(m => m.id === modelMessageId ? { ...m, content: modelResponse, thinkingSteps: updatedThinkingSteps } : m),
+            };
+          })
+        });
+        pendingUpdate = false;
+        lastUpdateTime = Date.now();
+      };
+
       for await (const chunk of stream as any) {
         let chunkAnswer = '';
         const candidate = chunk?.candidates?.[0];
@@ -539,19 +563,21 @@ ${transcript}
           urlContextMetadata = (candidate as any).urlContextMetadata as UrlContextMetadata;
         }
 
-        set({
-          sessions: get().sessions.map(s => {
-            if (s.id !== activeSessionId) return s;
-            const updatedThinkingSteps = accumulatedThoughts
-              .split('\n')
-              .map(step => step.trim())
-              .filter(step => step !== '');
-            return {
-              ...s,
-              messages: s.messages.map(m => m.id === modelMessageId ? { ...m, content: modelResponse, thinkingSteps: updatedThinkingSteps } : m),
-            };
-          })
-        });
+        // Batch updates to improve performance
+        updateCounter++;
+        const timeSinceLastUpdate = Date.now() - lastUpdateTime;
+        
+        // Update immediately for first chunk, then batch updates
+        if (updateCounter === 1 || timeSinceLastUpdate >= UPDATE_THRESHOLD) {
+          applyUpdate();
+        } else {
+          pendingUpdate = true;
+        }
+      }
+      
+      // Apply any pending update at the end
+      if (pendingUpdate) {
+        applyUpdate();
       }
     } catch (error: any) {
       console.error('Gemini API error:', error);
@@ -766,8 +792,11 @@ ${transcript}
   },
 }));
 
-// Persist basic parts on change (lightweight; will be revisited when migrating fully)
-useChatStore.subscribe((state) => {
+// Debounced localStorage persistence to avoid performance issues during streaming
+let persistTimeoutId: NodeJS.Timeout | null = null;
+let lastIsLoading = false;
+
+const persistToLocalStorage = (state: ChatStore) => {
   try {
     if (state.sessions.length > 0) {
       localStorage.setItem('chatSessions', JSON.stringify(state.sessions));
@@ -780,4 +809,29 @@ useChatStore.subscribe((state) => {
     localStorage.setItem('selectedModel', state.selectedModel || '');
     localStorage.setItem('systemInstruction', state.systemInstruction || '');
   } catch {}
+};
+
+useChatStore.subscribe((state) => {
+  // Skip persistence during active streaming to avoid performance issues
+  if (state.isLoading || state.isSummarizing || state.isSyncing || state.isGeneratingInstruction) {
+    lastIsLoading = true;
+    return;
+  }
+  
+  // If we just finished loading, persist immediately
+  if (lastIsLoading) {
+    lastIsLoading = false;
+    persistToLocalStorage(state);
+    return;
+  }
+  
+  // For other changes, debounce the persistence
+  if (persistTimeoutId) {
+    clearTimeout(persistTimeoutId);
+  }
+  
+  persistTimeoutId = setTimeout(() => {
+    persistToLocalStorage(state);
+    persistTimeoutId = null;
+  }, 500); // 500ms debounce
 });

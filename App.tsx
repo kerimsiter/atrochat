@@ -1,5 +1,5 @@
-
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import Sidebar from './components/Sidebar';
 import MessageBubble from './components/MessageBubble';
 import ChatInput, { ChatInputRef } from './components/ChatInput';
@@ -13,6 +13,73 @@ import { GEMINI_MODELS, SUMMARY_THRESHOLD } from './constants';
 import { useChatStore } from './store/chatStore';
 import { useAutoScroll } from './hooks/useAutoScroll';
 import FileContentModal from './components/FileContentModal';
+import { Message } from './types';
+
+// Virtual scrolling için MessageList bileşeni
+const MessageList: React.FC<{
+  messages: Message[];
+  onDelete: (messageId: string) => void;
+  onEdit: (messageId: string, newContent: string) => void;
+  scrollContainerRef: React.RefObject<HTMLDivElement>;
+}> = ({ messages, onDelete, onEdit, scrollContainerRef }) => {
+  const parentRef = useRef<HTMLDivElement>(null);
+  
+  // Virtual scrolling ayarları
+  const virtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 150, // Ortalama mesaj yüksekliği tahmini
+    overscan: 5, // Görünür alanın üstünde/altında kaç item render edilecek
+  });
+  
+  // Scroll container ref'ini parent'a bağla
+  useEffect(() => {
+    if (scrollContainerRef && parentRef.current) {
+      (scrollContainerRef as any).current = parentRef.current;
+    }
+  }, [scrollContainerRef]);
+  
+  const items = virtualizer.getVirtualItems();
+  
+  return (
+    <div 
+      ref={parentRef} 
+      className="flex-1 overflow-y-auto p-4" 
+      style={{ overflowAnchor: 'none' }}
+    >
+      <div
+        style={{
+          height: `${virtualizer.getTotalSize()}px`,
+          width: '100%',
+          position: 'relative',
+        }}
+      >
+        {items.map((virtualItem) => {
+          const message = messages[virtualItem.index];
+          return (
+            <div
+              key={virtualItem.key}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: `${virtualItem.size}px`,
+                transform: `translateY(${virtualItem.start}px)`,
+              }}
+            >
+              <MessageBubble
+                message={message}
+                onDelete={onDelete}
+                onEdit={onEdit}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -210,11 +277,12 @@ const App: React.FC = () => {
                 </button>
               </div>
             )}
-            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4" style={{ overflowAnchor: 'none' }}>
-                {activeSession.messages.map((msg) => (
-                    <MessageBubble key={msg.id} message={msg} onDelete={deleteMessage} onEdit={editMessage} />
-                ))}
-            </div>
+            <MessageList
+              messages={activeSession.messages}
+              onDelete={deleteMessage}
+              onEdit={editMessage}
+              scrollContainerRef={scrollContainerRef}
+            />
             <ChatInput ref={chatInputRef} onSendMessage={sendMessage} isLoading={isLoading || isSummarizing} onStop={stopGeneration} onFocus={scrollToBottomIfNear} />
           </>
         ) : (

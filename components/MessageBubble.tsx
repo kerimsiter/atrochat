@@ -341,4 +341,15 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDelete, onEdit
   );
 };
 
-export default MessageBubble;
+export default React.memo(MessageBubble, (prevProps, nextProps) => {
+  // Only re-render if the message content or key properties change
+  return (
+    prevProps.message.id === nextProps.message.id &&
+    prevProps.message.content === nextProps.message.content &&
+    prevProps.message.isThinking === nextProps.message.isThinking &&
+    JSON.stringify(prevProps.message.thinkingSteps) === JSON.stringify(nextProps.message.thinkingSteps) &&
+    JSON.stringify(prevProps.message.attachments) === JSON.stringify(nextProps.message.attachments) &&
+    JSON.stringify(prevProps.message.groundingMetadata) === JSON.stringify(nextProps.message.groundingMetadata) &&
+    JSON.stringify(prevProps.message.urlContextMetadata) === JSON.stringify(nextProps.message.urlContextMetadata)
+  );
+});
