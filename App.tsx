@@ -30,6 +30,21 @@ const MessageList: React.FC<{
     getScrollElement: () => parentRef.current,
     estimateSize: () => 150, // Ortalama mesaj yüksekliği tahmini
     overscan: 5, // Görünür alanın üstünde/altında kaç item render edilecek
+    // Her bir öğenin gerçek yüksekliğini ölçerek çakışmaları önle (child marginleri dahil)
+    measureElement: (element) => {
+      const rect = element.getBoundingClientRect();
+      let height = rect.height;
+      const child = element.firstElementChild as HTMLElement | null;
+      if (child) {
+        const childRect = child.getBoundingClientRect();
+        const style = window.getComputedStyle(child);
+        const mt = parseFloat(style.marginTop || '0') || 0;
+        const mb = parseFloat(style.marginBottom || '0') || 0;
+        const childOuter = childRect.height + mt + mb;
+        height = Math.max(height, childOuter);
+      }
+      return height;
+    },
   });
   
   // Scroll container ref'ini parent'a bağla
@@ -59,12 +74,13 @@ const MessageList: React.FC<{
           return (
             <div
               key={virtualItem.key}
+              ref={virtualizer.measureElement}
+              data-index={virtualItem.index}
               style={{
                 position: 'absolute',
                 top: 0,
                 left: 0,
                 width: '100%',
-                height: `${virtualItem.size}px`,
                 transform: `translateY(${virtualItem.start}px)`,
               }}
             >
