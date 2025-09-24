@@ -98,22 +98,36 @@ export function parseFigmaUrl(url: string): { fileKey: string; nodeId: string | 
  */
 export async function getFigmaNode(fileKey: string, nodeId: string, figmaToken: string): Promise<FigmaNode | null> {
   if (!figmaToken || !fileKey || !nodeId) {
-    throw new Error('Figma token, file key, and node ID are required');
+    console.warn('Missing required parameters for getFigmaNode:', { fileKey: !!fileKey, nodeId: !!nodeId, hasToken: !!figmaToken });
+    return null;
   }
 
-  const response = await fetch(`https://api.figma.com/v1/files/${fileKey}/nodes?ids=${nodeId}`, {
-    headers: {
-      'X-Figma-Token': figmaToken,
-      'Content-Type': 'application/json',
-    },
-  });
+  try {
+    const response = await fetch(`https://api.figma.com/v1/files/${fileKey}/nodes?ids=${nodeId}`, {
+      headers: {
+        'X-Figma-Token': figmaToken,
+        'Content-Type': 'application/json',
+      },
+    });
 
-  if (!response.ok) {
-    throw new Error(`Figma API error for nodes: ${response.status}`);
+    if (!response.ok) {
+      console.warn(`Figma API error for nodes (${response.status}):`, await response.text());
+      return null;
+    }
+
+    const data: FigmaNodeResponse = await response.json();
+
+    // Check if the node exists and is accessible
+    if (!data.nodes || !data.nodes[nodeId] || !data.nodes[nodeId].document) {
+      console.warn(`Node ${nodeId} not found or not accessible in file ${fileKey}`);
+      return null;
+    }
+
+    return data.nodes[nodeId].document;
+  } catch (error) {
+    console.error('Error fetching Figma node:', error);
+    return null;
   }
-
-  const data: FigmaNodeResponse = await response.json();
-  return data.nodes?.[nodeId]?.document ?? null;
 }
 
 /**
@@ -122,23 +136,30 @@ export async function getFigmaNode(fileKey: string, nodeId: string, figmaToken: 
  * @param figmaToken Figma access token
  * @returns Figma file data or throws error
  */
-export async function getFigmaFile(fileKey: string, figmaToken: string): Promise<FigmaFile> {
+export async function getFigmaFile(fileKey: string, figmaToken: string): Promise<FigmaFile | null> {
   if (!figmaToken || !fileKey) {
-    throw new Error('Figma token and file key are required');
+    console.warn('Missing required parameters for getFigmaFile:', { fileKey: !!fileKey, hasToken: !!figmaToken });
+    return null;
   }
 
-  const response = await fetch(`https://api.figma.com/v1/files/${fileKey}`, {
-    headers: {
-      'X-Figma-Token': figmaToken,
-      'Content-Type': 'application/json',
-    },
-  });
+  try {
+    const response = await fetch(`https://api.figma.com/v1/files/${fileKey}`, {
+      headers: {
+        'X-Figma-Token': figmaToken,
+        'Content-Type': 'application/json',
+      },
+    });
 
-  if (!response.ok) {
-    throw new Error(`Figma API error for file: ${response.status}`);
+    if (!response.ok) {
+      console.warn(`Figma API error for file (${response.status}):`, await response.text());
+      return null;
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching Figma file:', error);
+    return null;
   }
-
-  return await response.json();
 }
 
 /**
@@ -154,29 +175,35 @@ export async function getFigmaImages(
   figmaToken: string
 ): Promise<Record<string, string>> {
   if (!figmaToken || !fileKey || nodeIds.length === 0) {
+    console.warn('Missing required parameters for getFigmaImages:', { fileKey: !!fileKey, nodeIdsLength: nodeIds.length, hasToken: !!figmaToken });
     return {};
   }
 
-  const params = new URLSearchParams({
-    ids: nodeIds.join(','),
-    format: 'png',
-    scale: '1',
-  });
+  try {
+    const params = new URLSearchParams({
+      ids: nodeIds.join(','),
+      format: 'png',
+      scale: '1',
+    });
 
-  const response = await fetch(`https://api.figma.com/v1/images/${fileKey}?${params}`, {
-    headers: {
-      'X-Figma-Token': figmaToken,
-      'Content-Type': 'application/json',
-    },
-  });
+    const response = await fetch(`https://api.figma.com/v1/images/${fileKey}?${params}`, {
+      headers: {
+        'X-Figma-Token': figmaToken,
+        'Content-Type': 'application/json',
+      },
+    });
 
-  if (!response.ok) {
-    console.warn(`Failed to fetch Figma images: ${response.status}`);
+    if (!response.ok) {
+      console.warn(`Failed to fetch Figma images (${response.status}):`, await response.text());
+      return {};
+    }
+
+    const data = await response.json();
+    return data.images || {};
+  } catch (error) {
+    console.error('Error fetching Figma images:', error);
     return {};
   }
-
-  const data = await response.json();
-  return data.images || {};
 }
 
 /**

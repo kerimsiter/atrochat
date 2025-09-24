@@ -424,13 +424,15 @@ ${transcript}
             nodeId ? getFigmaImages(fileKey, [nodeId], figmaToken) : Promise.resolve(null),
           ]);
 
-          if (!nodeData) throw new Error('Figma node data could not be fetched.');
+          if (!nodeData) {
+            throw new Error('Figma node data could not be fetched. Node may not exist or you may not have access to it.');
+          }
 
           const summary = summarizeFigmaNode(nodeId ? nodeData : nodeData.document.children[0]);
           const jsonData = JSON.stringify(nodeData, null, 2);
           const truncatedJson = jsonData.length > 8000 ? jsonData.substring(0, 8000) + '\n...' : jsonData;
 
-          apiMessageContent = `Bir Figma tasarım bileşeni/ekranı hakkında soru soruluyor. Yanıtını aşağıdaki özet ve JSON verilerine dayandır. JSON'daki children hiyerarşisini, fills, strokes, effects gibi stil özelliklerini ve characters (metin) içeriğini kullanarak spesifik soruları yanıtla.\n\n--- TASARIM ÖZETİ ---\n${summary}\n\n--- DETAYLI JSON VERİSİ ---\n\`\`\`json\n${truncatedJson}\n\`\`\`\n\n--- KULLANICI SORUSU ---\n${messageContent.replace(figmaLinkData.fileKey, '')}`;
+          apiMessageContent = `Bir Figma tasarım bileşeni/ekranı hakkında soru soruluyor. Yanıtını aşağıdaki özet ve JSON verilerine dayandır. JSON'daki children hiyerarşisini, fills, strokes, effects gibi stil özelliklerini ve characters (metin) içeriğini kullanarak spesifik soruları yanıtla.\n\n--- TASARIM ÖZETİ ---\n${summary}\n\n--- DETAYLI JSON VERİSİ ---\n\`\`\`json\n${truncatedJson}\n\`\`\`\n\n--- KULLANICI SORUSU ---\n${messageContent.replace(/https?:\/\/www\.figma\.com\/[^\s]+/g, '').trim()}`;
 
           if (images && nodeId && images[nodeId]) {
             imageAttachment = {
@@ -445,7 +447,7 @@ ${transcript}
           const errorMessage: Message = {
             id: `msg-${Date.now() + 1}`,
             role: Role.SYSTEM,
-            content: `Figma dosyası analiz edilirken bir hata oluştu: ${error instanceof Error ? error.message : 'Bilinmeyen hata'}`,
+            content: `Figma dosyası analiz edilirken bir hata oluştu: ${error instanceof Error ? error.message : 'Bilinmeyen hata'}. Lütfen Figma linkinin doğru olduğundan ve erişim izninizin bulunduğundan emin olun.`,
             timestamp: new Date().toISOString(),
           };
           set({
