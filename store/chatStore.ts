@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import { ChatSession, Message, Role, FileContent, UrlContextMetadata, Attachment } from '../types';
 import { getGeminiChatStream, generateSingleResponse, countTokens } from '../services/geminiService';
+import { parseFigmaUrl, getFigmaFile, summarizeFigmaFile } from '../services/figmaService';
 import { syncRepoChanges } from '../services/githubService';
 import { TOKEN_ESTIMATE_FACTOR, COST_PER_MILLION_TOKENS, DEFAULT_SYSTEM_INSTRUCTION } from '../constants';
-import type { Content, Part } from '@google/genai';
 
 // Module-scope controllers/state for streaming
 let currentStream: AsyncIterable<any> | null = null;
@@ -32,7 +32,7 @@ interface ChatState {
 
 interface ChatActions {
   hydrate: () => void;
-  setApiKeys: (keys: { gemini: string; github: string }) => void;
+  setApiKeys: (keys: { gemini: string; github: string; figma: string }) => void;
   setSelectedModel: (model?: string) => void;
   setSystemInstruction: (instruction: string) => void;
   generateSystemInstruction: () => Promise<void>;
@@ -199,11 +199,12 @@ ${transcript}
     }
   },
 
-  setApiKeys: ({ gemini, github }) => {
-    set({ geminiApiKey: gemini, githubToken: github });
+  setApiKeys: ({ gemini, github, figma }) => {
+    set({ geminiApiKey: gemini, githubToken: github, figmaToken: figma });
     try {
       localStorage.setItem('geminiApiKey', gemini);
       localStorage.setItem('githubToken', github);
+      localStorage.setItem('figmaToken', figma);
     } catch {}
   },
 
@@ -332,7 +333,7 @@ ${transcript}
   // Implemented actions migrated from useChatManager
   sendMessage: async (messageContent, attachments, useUrlAnalysis, useGoogleSearch) => {
     const state = get();
-    const { activeSessionId, sessions, geminiApiKey } = state;
+    const { activeSessionId, sessions, geminiApiKey, figmaToken } = state;
     if (!activeSessionId) return;
     const currentSession = sessions.find(s => s.id === activeSessionId);
     if (!currentSession) return;
@@ -396,11 +397,22 @@ ${transcript}
       apiMessageContent = preamble;
     }
 
-    attachments.forEach(att => {
-      if (!att.type.startsWith('image/')) {
-        apiMessageContent += `\n\n--- EKLENEN DOSYA: ${att.name} ---\n\`\`\`\n${att.data}\n\`\`\``;
+    // 3) Figma link detection and processing
+    if (useUrlAnalysis && figmaToken) {
+      const figmaFileKey = parseFigmaUrl(messageContent);
+      if (figmaFileKey) {
+        try {
+          const figmaFile = await getFigmaFile(figmaFileKey, figmaToken);
+          const figmaSummary = summarizeFigmaFile(figmaFile);
+
+          // Add Figma context to the message
+          apiMessageContent = `Figma Design Context:\n${figmaSummary}\n\n--- USER QUESTION ---\n${apiMessageContent}`;
+        } catch (error) {
+          console.warn('Failed to fetch Figma data:', error);
+          // Continue without Figma context if there's an error
+        }
       }
-    });
+    }
 
     const userMessage: Message = {
       id: `msg-${Date.now()}`,
@@ -805,7 +817,7 @@ const persistToLocalStorage = (state: ChatStore) => {
       localStorage.setItem('activeSessionId', state.activeSessionId);
     }
     localStorage.setItem('geminiApiKey', state.geminiApiKey || '');
-    localStorage.setItem('githubToken', state.githubToken || '');
+    localStorage.setItem('figmaToken', state.figmaToken || '');
     localStorage.setItem('selectedModel', state.selectedModel || '');
     localStorage.setItem('systemInstruction', state.systemInstruction || '');
   } catch {}

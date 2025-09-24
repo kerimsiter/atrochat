@@ -12,6 +12,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   const {
     geminiApiKey: storedGeminiKey,
     githubToken: storedGithubToken,
+    figmaToken: storedFigmaToken,
     systemInstruction: storedInstruction,
     isGeneratingInstruction,
     generateSystemInstruction,
@@ -20,6 +21,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   } = useChatStore();
   const [geminiApiKey, setGeminiApiKey] = useState(storedGeminiKey || '');
   const [githubToken, setGithubToken] = useState(storedGithubToken || '');
+  const [figmaToken, setFigmaToken] = useState(storedFigmaToken || '');
   const [systemInstruction, setSystemInstructionLocal] = useState(storedInstruction || '');
 
   useEffect(() => {
@@ -27,7 +29,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   }, [storedInstruction]);
 
   const handleSave = () => {
-    setApiKeys({ gemini: geminiApiKey.trim(), github: githubToken.trim() });
+    setApiKeys({ gemini: geminiApiKey.trim(), github: githubToken.trim(), figma: figmaToken.trim() });
     setSystemInstruction(systemInstruction.trim());
     onClose();
   };
@@ -127,6 +129,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
               placeholder="GitHub Token (opsiyonel)"
               className="w-full bg-surface-light text-primary rounded-md px-3 py-2 focus:ring-2 focus:ring-accent-dark focus:outline-none transition placeholder-secondary/70 border border-glass text-sm"
               aria-label="GitHub Token"
+            />
+          </div>
+
+          {/* Figma Token Section (compact) */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <KeyIcon className="w-5 h-5 text-secondary" />
+              <h3 className="text-base font-semibold text-primary">Figma Access Token</h3>
+            </div>
+            <label htmlFor="figma_token" className="sr-only">Figma Access Token</label>
+            <input
+              id="figma_token"
+              type="password"
+              value={figmaToken}
+              onChange={(e) => setFigmaToken(e.target.value)}
+              placeholder="Figma Access Token (opsiyonel)"
+              className="w-full bg-surface-light text-primary rounded-md px-3 py-2 focus:ring-2 focus:ring-accent-dark focus:outline-none transition placeholder-secondary/70 border border-glass text-sm"
+              aria-label="Figma Access Token"
             />
           </div>
 

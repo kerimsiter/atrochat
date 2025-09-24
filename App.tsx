@@ -118,6 +118,7 @@ const App: React.FC = () => {
     summarizeAndContinueChat,
     geminiApiKey,
     githubToken,
+    figmaToken,
     selectedModel,
     setSelectedModel,
     hydrate,
