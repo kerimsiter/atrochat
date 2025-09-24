@@ -4,6 +4,7 @@ import { getGeminiChatStream, generateSingleResponse, countTokens } from '../ser
 import { parseFigmaUrl, getFigmaFile, summarizeFigmaFile, getFigmaNode, getFigmaImages, summarizeFigmaNode } from '../services/figmaService';
 import { syncRepoChanges } from '../services/githubService';
 import { TOKEN_ESTIMATE_FACTOR, COST_PER_MILLION_TOKENS, DEFAULT_SYSTEM_INSTRUCTION } from '../constants';
+import type { Content, Part } from '@google/genai';
 
 // Module-scope controllers/state for streaming
 let currentStream: AsyncIterable<any> | null = null;
@@ -24,6 +25,7 @@ interface ChatState {
   isSummarizing: boolean;
   geminiApiKey: string;
   githubToken: string;
+  figmaToken: string;
   selectedModel?: string;
   systemInstruction: string;
   viewingFile: FileContent | null;
@@ -82,6 +84,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   geminiApiKey: localStorage.getItem('geminiApiKey')
     || ((process as any)?.env?.GEMINI_API_KEY || ''),
   githubToken: localStorage.getItem('githubToken') || localStorage.getItem('githubPat') || '',
+  figmaToken: localStorage.getItem('figmaToken') || '',
   selectedModel: localStorage.getItem('selectedModel') || localStorage.getItem('selectedGeminiModel') || undefined,
   systemInstruction: localStorage.getItem('systemInstruction') || DEFAULT_SYSTEM_INSTRUCTION,
   viewingFile: null,
@@ -102,6 +105,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
               || get().geminiApiKey
               || ((process as any)?.env?.GEMINI_API_KEY || ''),
             githubToken: localStorage.getItem('githubToken') || localStorage.getItem('githubPat') || get().githubToken,
+            figmaToken: localStorage.getItem('figmaToken') || get().figmaToken,
             selectedModel: localStorage.getItem('selectedModel') || localStorage.getItem('selectedGeminiModel') || get().selectedModel,
             systemInstruction: localStorage.getItem('systemInstruction') || get().systemInstruction,
           });
