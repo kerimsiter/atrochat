@@ -53,12 +53,21 @@ export interface FigmaStyle {
   styleType: 'FILL' | 'TEXT' | 'EFFECT' | 'GRID';
 }
 
+// Yeni Arayüz: Belirli bir node istendiğinde API'den dönen yanıt için
+export interface FigmaNodeResponse {
+  nodes: {
+    [nodeId: string]: {
+      document: FigmaNode;
+    } | null;
+  };
+}
+
 /**
- * Parse Figma URL to extract file key
+ * Parse Figma URL to extract file key and node ID
  * @param url Figma design URL
- * @returns file key or null if invalid URL
+ * @returns Object with fileKey and nodeId, or null if invalid URL
  */
-export function parseFigmaUrl(url: string): string | null {
+export function parseFigmaUrl(url: string): { fileKey: string; nodeId: string | null } | null {
   try {
     const urlObj = new URL(url);
     if (urlObj.hostname !== 'www.figma.com') {
@@ -68,8 +77,10 @@ export function parseFigmaUrl(url: string): string | null {
     // Figma URLs are in format: https://www.figma.com/design/{fileKey}/{title}?node-id={nodeId}
     const pathParts = urlObj.pathname.split('/').filter(Boolean);
 
-    if (pathParts.length >= 2 && pathParts[0] === 'design') {
-      return pathParts[1]; // fileKey is the second part
+    if (pathParts.length >= 2 && (pathParts[0] === 'design' || pathParts[0] === 'file')) {
+      const fileKey = pathParts[1];
+      const nodeId = urlObj.searchParams.get('node-id');
+      return { fileKey, nodeId };
     }
 
     return null;
@@ -79,18 +90,41 @@ export function parseFigmaUrl(url: string): string | null {
 }
 
 /**
+ * Fetch a specific node and its children from a Figma file
+ * @param fileKey Figma file key
+ * @param nodeId The ID of the node to fetch
+ * @param figmaToken Figma access token
+ * @returns The requested FigmaNode or null
+ */
+export async function getFigmaNode(fileKey: string, nodeId: string, figmaToken: string): Promise<FigmaNode | null> {
+  if (!figmaToken || !fileKey || !nodeId) {
+    throw new Error('Figma token, file key, and node ID are required');
+  }
+
+  const response = await fetch(`https://api.figma.com/v1/files/${fileKey}/nodes?ids=${nodeId}`, {
+    headers: {
+      'X-Figma-Token': figmaToken,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Figma API error for nodes: ${response.status}`);
+  }
+
+  const data: FigmaNodeResponse = await response.json();
+  return data.nodes?.[nodeId]?.document ?? null;
+}
+
+/**
  * Fetch Figma file data using the API
  * @param fileKey Figma file key
  * @param figmaToken Figma access token
  * @returns Figma file data or throws error
  */
 export async function getFigmaFile(fileKey: string, figmaToken: string): Promise<FigmaFile> {
-  if (!figmaToken) {
-    throw new Error('Figma access token is required');
-  }
-
-  if (!fileKey) {
-    throw new Error('Figma file key is required');
+  if (!figmaToken || !fileKey) {
+    throw new Error('Figma token and file key are required');
   }
 
   const response = await fetch(`https://api.figma.com/v1/files/${fileKey}`, {
@@ -101,19 +135,10 @@ export async function getFigmaFile(fileKey: string, figmaToken: string): Promise
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Invalid Figma access token');
-    } else if (response.status === 403) {
-      throw new Error('Access denied to Figma file');
-    } else if (response.status === 404) {
-      throw new Error('Figma file not found');
-    } else {
-      throw new Error(`Figma API error: ${response.status} ${response.statusText}`);
-    }
+    throw new Error(`Figma API error for file: ${response.status}`);
   }
 
-  const data = await response.json();
-  return data as FigmaFile;
+  return await response.json();
 }
 
 /**
@@ -146,12 +171,45 @@ export async function getFigmaImages(
   });
 
   if (!response.ok) {
-    console.warn(`Failed to fetch Figma images: ${response.status} ${response.statusText}`);
+    console.warn(`Failed to fetch Figma images: ${response.status}`);
     return {};
   }
 
   const data = await response.json();
   return data.images || {};
+}
+
+/**
+ * Summarize a specific Figma node for AI context
+ * @param node The FigmaNode to summarize
+ * @returns A concise summary string
+ */
+export function summarizeFigmaNode(node: FigmaNode): string {
+  const summary = [
+    `# Figma Node Analysis: "${node.name}"`,
+    ` - **Type**: ${node.type}`,
+    ` - **ID**: ${node.id}`,
+  ];
+
+  if (node.children && node.children.length > 0) {
+    summary.push(` - **Contains**: ${node.children.length} direct child layers.`);
+    const childTypes = node.children.map(c => c.type).reduce((acc, type) => {
+      acc[type] = (acc[type] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    summary.push(`   - Children Breakdown: ${Object.entries(childTypes).map(([type, count]) => ` ${type} (${count})`).join(', ')}`);
+  }
+
+  if (node.fills && node.fills.length > 0 && node.fills[0].color) {
+    const color = node.fills[0].color;
+    summary.push(` - **Background Color**: rgba(${Math.round(color.r * 255)}, ${Math.round(color.g * 255)}, ${Math.round(color.b * 255)}, ${color.a.toFixed(2)})`);
+  }
+
+  if (node.characters) {
+    summary.push(` - **Text Content**: "${node.characters.substring(0, 50)}${node.characters.length > 50 ? '...' : ''}"`);
+  }
+
+  return summary.join('\n');
 }
 
 /**

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { ChatSession, Message, Role, FileContent, UrlContextMetadata, Attachment } from '../types';
 import { getGeminiChatStream, generateSingleResponse, countTokens } from '../services/geminiService';
-import { parseFigmaUrl, getFigmaFile, summarizeFigmaFile } from '../services/figmaService';
+import { parseFigmaUrl, getFigmaFile, summarizeFigmaFile, getFigmaNode, getFigmaImages, summarizeFigmaNode } from '../services/figmaService';
 import { syncRepoChanges } from '../services/githubService';
 import { TOKEN_ESTIMATE_FACTOR, COST_PER_MILLION_TOKENS, DEFAULT_SYSTEM_INSTRUCTION } from '../constants';
 
@@ -352,6 +352,7 @@ ${transcript}
     set({ isLoading: true });
 
     let apiMessageContent = messageContent;
+    let imageAttachment: Attachment | null = null;
     const pendingUpdate = (currentSession as any).pendingContextUpdate;
     const projectFiles = currentSession.projectFiles || [];
     const isSendingFullContext = currentSession.isContextStale && projectFiles.length > 0;
@@ -399,17 +400,55 @@ ${transcript}
 
     // 3) Figma link detection and processing
     if (useUrlAnalysis && figmaToken) {
-      const figmaFileKey = parseFigmaUrl(messageContent);
-      if (figmaFileKey) {
-        try {
-          const figmaFile = await getFigmaFile(figmaFileKey, figmaToken);
-          const figmaSummary = summarizeFigmaFile(figmaFile);
+      const figmaLinkData = parseFigmaUrl(messageContent);
 
-          // Add Figma context to the message
-          apiMessageContent = `Figma Design Context:\n${figmaSummary}\n\n--- USER QUESTION ---\n${apiMessageContent}`;
+      if (figmaLinkData && figmaLinkData.fileKey) {
+        const { fileKey, nodeId } = figmaLinkData;
+
+        // Kullanıcıya analiz başladığını bildiren bir sistem mesajı ekleyelim
+        const systemMessage: Message = {
+          id: `msg-${Date.now()}`,
+          role: Role.SYSTEM,
+          content: `Figma linki algılandı. Tasarım verileri analiz ediliyor: ${fileKey}${nodeId ? ` (Node: ${nodeId})` : ''}`,
+          timestamp: new Date().toISOString(),
+        };
+        set({ sessions: sessions.map(s => s.id === activeSessionId ? { ...s, messages: [...s.messages, systemMessage] } : s) });
+
+        try {
+          const [nodeData, images] = await Promise.all([
+            nodeId ? getFigmaNode(fileKey, nodeId, figmaToken) : getFigmaFile(fileKey, figmaToken),
+            nodeId ? getFigmaImages(fileKey, [nodeId], figmaToken) : Promise.resolve(null),
+          ]);
+
+          if (!nodeData) throw new Error('Figma node data could not be fetched.');
+
+          const summary = summarizeFigmaNode(nodeId ? nodeData : nodeData.document.children[0]);
+          const jsonData = JSON.stringify(nodeData, null, 2);
+          const truncatedJson = jsonData.length > 8000 ? jsonData.substring(0, 8000) + '\n...' : jsonData;
+
+          apiMessageContent = `Bir Figma tasarım bileşeni/ekranı hakkında soru soruluyor. Yanıtını aşağıdaki özet ve JSON verilerine dayandır. JSON'daki children hiyerarşisini, fills, strokes, effects gibi stil özelliklerini ve characters (metin) içeriğini kullanarak spesifik soruları yanıtla.\n\n--- TASARIM ÖZETİ ---\n${summary}\n\n--- DETAYLI JSON VERİSİ ---\n\`\`\`json\n${truncatedJson}\n\`\`\`\n\n--- KULLANICI SORUSU ---\n${messageContent.replace(figmaLinkData.fileKey, '')}`;
+
+          if (images && nodeId && images[nodeId]) {
+            imageAttachment = {
+              name: 'Figma Preview',
+              type: 'image/png',
+              data: images[nodeId], // Bu bir URL
+            };
+          }
+
         } catch (error) {
-          console.warn('Failed to fetch Figma data:', error);
-          // Continue without Figma context if there's an error
+          console.error('Figma analysis error:', error);
+          const errorMessage: Message = {
+            id: `msg-${Date.now() + 1}`,
+            role: Role.SYSTEM,
+            content: `Figma dosyası analiz edilirken bir hata oluştu: ${error instanceof Error ? error.message : 'Bilinmeyen hata'}`,
+            timestamp: new Date().toISOString(),
+          };
+          set({
+            sessions: get().sessions.map(s => s.id === activeSessionId ? { ...s, messages: [...s.messages, errorMessage] } : s),
+            isLoading: false
+          });
+          return; // Hata durumunda işlemi durdur
         }
       }
     }
@@ -419,7 +458,7 @@ ${transcript}
       role: Role.USER,
       content: messageContent,
       apiContent: apiMessageContent,
-      attachments,
+      attachments: [...attachments, ...(imageAttachment ? [imageAttachment] : [])],
       timestamp: new Date().toISOString(),
     };
 
