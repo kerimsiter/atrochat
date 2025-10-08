@@ -816,23 +816,45 @@ ${transcript}
   },
 
   editMessage: (messageId: string, newContent: string) => {
-    const { activeSessionId, sessions } = get();
+    const { activeSessionId, sessions, sendMessage } = get();
     if (!activeSessionId) return;
+
     const session = sessions.find(s => s.id === activeSessionId);
     if (!session) return;
+
     const messageIndex = session.messages.findIndex(m => m.id === messageId);
-    if (messageIndex === -1 || session.messages[messageIndex].role !== Role.USER) return;
-    const originalAttachments = session.messages[messageIndex].attachments || [];
+    if (messageIndex === -1 || session.messages[messageIndex].role !== Role.USER) {
+      return;
+    }
+
+    const originalMessage = session.messages[messageIndex];
+    const originalAttachments = originalMessage.attachments || [];
+
+    // Truncate messages up to the one being edited
     const truncatedMessages = session.messages.slice(0, messageIndex);
+
+    // Recalculate history token count for the truncated history
     let newHistoryTokenCount = 0;
     truncatedMessages.forEach(msg => {
-      if (msg.role === Role.SYSTEM) return;
-      newHistoryTokenCount += estimateTokens((msg as any).apiContent || msg.content);
+      if (msg.role === Role.USER || msg.role === Role.MODEL) {
+        newHistoryTokenCount += estimateTokens((msg as any).apiContent || msg.content);
+      }
     });
-    set({ sessions: sessions.map(s => s.id === activeSessionId ? { ...s, messages: truncatedMessages, historyTokenCount: newHistoryTokenCount } : s) });
-    // defer resend via a minimal flag in state if needed; for now this action truncates history.
-    // A follow-up UI action should call sendMessage(newContent, originalAttachments, false, false)
-    // to resend the edited input.
+
+    // Update the session state with the truncated message list
+    set({
+      sessions: sessions.map(s =>
+        s.id === activeSessionId
+          ? { ...s, messages: truncatedMessages, historyTokenCount: newHistoryTokenCount }
+          : s
+      ),
+    });
+
+    // Immediately resend the edited message
+    // Use a timeout to ensure the state update has processed before sending the message
+    setTimeout(() => {
+      sendMessage(newContent, originalAttachments, false, false);
+    }, 0);
   },
 
   openFileViewer: (filePath) => {
