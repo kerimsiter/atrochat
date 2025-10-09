@@ -3,8 +3,19 @@ import { ChatSession, Message, Role, FileContent, UrlContextMetadata, Attachment
 import { getGeminiChatStream, generateSingleResponse, countTokens } from '../services/geminiService';
 import { parseFigmaUrl, getFigmaFile, summarizeFigmaFile, getFigmaNode, getFigmaImages, summarizeFigmaNode } from '../services/figmaService';
 import { syncRepoChanges } from '../services/githubService';
-import { TOKEN_ESTIMATE_FACTOR, COST_PER_MILLION_TOKENS, DEFAULT_SYSTEM_INSTRUCTION } from '../constants';
+import { TOKEN_ESTIMATE_FACTOR, COST_PER_MILLION_TOKENS, DEFAULT_SYSTEM_INSTRUCTION, CONTEXT_WINDOW_LIMIT } from '../constants';
 import type { Content, Part } from '@google/genai';
+import Dexie from 'dexie';
+
+// Veritabanını ve tabloları tanımla
+const db = new Dexie('ChatDatabase') as Dexie & {
+  sessions: Dexie.Table<ChatSession, string>;
+  misc: Dexie.Table<{key: string, value: any}, string>;
+};
+db.version(1).stores({
+  sessions: 'id, createdAt', // 'id' anahtar, 'createdAt' index'li
+  misc: 'key' // API anahtarı gibi diğer şeyleri saklamak için
+});
 
 // Module-scope controllers/state for streaming
 let currentStream: AsyncIterable<any> | null = null;
@@ -91,28 +102,22 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   isFileViewerOpen: false,
 
   // Actions
-  hydrate: () => {
+  hydrate: async () => {
     try {
-      const savedSessions = localStorage.getItem('chatSessions');
-      if (savedSessions) {
-        const parsed = JSON.parse(savedSessions) as ChatSession[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          set({
-            sessions: parsed,
-            activeSessionId: localStorage.getItem('activeSessionId') || parsed[0].id,
-            geminiApiKey:
-              localStorage.getItem('geminiApiKey')
-              || get().geminiApiKey
-              || ((process as any)?.env?.GEMINI_API_KEY || ''),
-            githubToken: localStorage.getItem('githubToken') || localStorage.getItem('githubPat') || get().githubToken,
-            figmaToken: localStorage.getItem('figmaToken') || get().figmaToken,
-            selectedModel: localStorage.getItem('selectedModel') || localStorage.getItem('selectedGeminiModel') || get().selectedModel,
-            systemInstruction: localStorage.getItem('systemInstruction') || get().systemInstruction,
-          });
-        } else {
-          const s = createInitialSession();
-          set({ sessions: [s], activeSessionId: s.id });
-        }
+      const savedSessions = await db.sessions.orderBy('createdAt').reverse().toArray();
+      if (savedSessions && savedSessions.length > 0) {
+        set({
+          sessions: savedSessions,
+          activeSessionId: localStorage.getItem('activeSessionId') || savedSessions[0].id,
+          geminiApiKey:
+            localStorage.getItem('geminiApiKey')
+            || get().geminiApiKey
+            || ((process as any)?.env?.GEMINI_API_KEY || ''),
+          githubToken: localStorage.getItem('githubToken') || localStorage.getItem('githubPat') || get().githubToken,
+          figmaToken: localStorage.getItem('figmaToken') || get().figmaToken,
+          selectedModel: localStorage.getItem('selectedModel') || localStorage.getItem('selectedGeminiModel') || get().selectedModel,
+          systemInstruction: localStorage.getItem('systemInstruction') || get().systemInstruction,
+        });
       } else {
         const s = createInitialSession();
         set({ sessions: [s], activeSessionId: s.id });
@@ -283,12 +288,20 @@ ${transcript}
     if (activeSessionId === sessionId) {
       nextActive = remaining[0]?.id ?? null;
       if (!nextActive) {
+        // Persist deletion to IndexedDB even if this was the last session
+        (async () => {
+          try { await db.sessions.delete(sessionId); } catch {}
+        })();
         const s = createInitialSession();
         set({ sessions: [s], activeSessionId: s.id });
         return;
       }
     }
     set({ sessions: remaining, activeSessionId: nextActive });
+    // Persist deletion to IndexedDB immediately to prevent deleted chats from reappearing on reload
+    (async () => {
+      try { await db.sessions.delete(sessionId); } catch {}
+    })();
   },
 
   addFilesToContext: (files, sourceName, repoUrl, commitSha) => {
@@ -493,14 +506,28 @@ ${transcript}
       } : s),
     });
 
-    const messagesForHistory = updatedMessages.filter(m => m.role === Role.USER || m.role === Role.MODEL);
-    const lastMessageForApi = messagesForHistory.pop();
+    // Build history with a sliding window to keep within token budget
+    const messagesForHistoryAll = updatedMessages.filter(m => m.role === Role.USER || m.role === Role.MODEL);
+    const lastMessageForApi = messagesForHistoryAll[messagesForHistoryAll.length - 1];
     if (!lastMessageForApi) {
       set({ isLoading: false });
       return;
     }
+    const historyCandidates = messagesForHistoryAll.slice(0, -1);
+    // Prune older messages to fit into ~80% of context window
+    const HISTORY_BUDGET = Math.floor(CONTEXT_WINDOW_LIMIT * 0.8);
+    let usedTokensForHistory = 0;
+    const reversedCandidates = [...historyCandidates].reverse();
+    const keptHistoryMessages: Message[] = [];
+    for (const msg of reversedCandidates) {
+      const t = estimateTokens(((msg as any).apiContent || msg.content) || '');
+      if (usedTokensForHistory + t > HISTORY_BUDGET) break;
+      keptHistoryMessages.push(msg);
+      usedTokensForHistory += t;
+    }
+    const prunedHistoryMessages = keptHistoryMessages.reverse();
 
-    const history: Content[] = messagesForHistory.map(msg => {
+    const history: Content[] = prunedHistoryMessages.map(msg => {
       const msgParts: Part[] = [{ text: (msg as any).apiContent || msg.content }];
       if (msg.role === Role.USER && msg.attachments) {
         msg.attachments.forEach(att => {
@@ -852,12 +879,22 @@ ${transcript}
 // Debounced localStorage persistence to avoid performance issues during streaming
 let persistTimeoutId: NodeJS.Timeout | null = null;
 let lastIsLoading = false;
+let lastIsHydrating = true;
 
-const persistToLocalStorage = (state: ChatStore) => {
+const persistToLocalStorage = async (state: ChatStore) => {
   try {
-    if (state.sessions.length > 0) {
-      localStorage.setItem('chatSessions', JSON.stringify(state.sessions));
-    }
+    // IndexedDB senkronizasyonu: eksik olanları sil, mevcutları güncelle
+    await (db as any).transaction('rw', (db as any).sessions, async () => {
+      const currentIds = new Set(state.sessions.map(s => s.id));
+      const existingIds: string[] = await ((db as any).sessions.toCollection().primaryKeys());
+      const toDelete = existingIds.filter((id: string) => !currentIds.has(id));
+      if (toDelete.length > 0) {
+        await (db as any).sessions.bulkDelete(toDelete);
+      }
+      if (state.sessions.length > 0) {
+        await (db as any).sessions.bulkPut(state.sessions);
+      }
+    });
     if (state.activeSessionId) {
       localStorage.setItem('activeSessionId', state.activeSessionId);
     }
@@ -869,26 +906,30 @@ const persistToLocalStorage = (state: ChatStore) => {
 };
 
 useChatStore.subscribe((state) => {
-  // Skip persistence during active streaming to avoid performance issues
-  if (state.isLoading || state.isSummarizing || state.isSyncing || state.isGeneratingInstruction) {
-    lastIsLoading = true;
+  // Yükleme/streaming/senkronizasyon sırasında persisti atla
+  if (state.isLoading || state.isSummarizing || state.isSyncing || state.isGeneratingInstruction || state.isHydrating) {
+    if (state.isLoading) lastIsLoading = true;
+    if (state.isHydrating) lastIsHydrating = true;
     return;
   }
-  
-  // If we just finished loading, persist immediately
+  // Streaming biter bitmez hemen persist et
   if (lastIsLoading) {
     lastIsLoading = false;
     persistToLocalStorage(state);
     return;
   }
-  
-  // For other changes, debounce the persistence
+  // Hydration biter bitmez hemen persist et (ilk oturumun kalıcı olması için)
+  if (lastIsHydrating) {
+    lastIsHydrating = false;
+    persistToLocalStorage(state);
+    return;
+  }
+  // Diğer değişikliklerde debounce ile persist et
   if (persistTimeoutId) {
     clearTimeout(persistTimeoutId);
   }
-  
   persistTimeoutId = setTimeout(() => {
     persistToLocalStorage(state);
     persistTimeoutId = null;
-  }, 500); // 500ms debounce
+  }, 500);
 });
