@@ -843,7 +843,7 @@ ${transcript}
   },
 
   editMessage: (messageId: string, newContent: string) => {
-    const { activeSessionId, sessions } = get();
+    const { activeSessionId, sessions, sendMessage } = get();
     if (!activeSessionId) return;
     const session = sessions.find(s => s.id === activeSessionId);
     if (!session) return;
@@ -857,9 +857,8 @@ ${transcript}
       newHistoryTokenCount += estimateTokens((msg as any).apiContent || msg.content);
     });
     set({ sessions: sessions.map(s => s.id === activeSessionId ? { ...s, messages: truncatedMessages, historyTokenCount: newHistoryTokenCount } : s) });
-    // defer resend via a minimal flag in state if needed; for now this action truncates history.
-    // A follow-up UI action should call sendMessage(newContent, originalAttachments, false, false)
-    // to resend the edited input.
+
+    sendMessage(newContent, originalAttachments, false, false);
   },
 
   openFileViewer: (filePath) => {
