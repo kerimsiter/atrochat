@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 
@@ -23,6 +24,11 @@ export default defineConfig(({ mode }) => {
       preview: {
         port: previewPort,
         host: true,
-      }
+      },
+      test: {
+        globals: true,
+        environment: 'jsdom',
+        setupFiles: './src/test/setup.ts',
+      },
     };
 });
