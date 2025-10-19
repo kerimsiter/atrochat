@@ -17,7 +17,7 @@ export const TOKEN_ESTIMATE_FACTOR = 4;
 export const CONTEXT_WINDOW_LIMIT = 1000000;
 
 // Pricing for gemini-2.5-flash (hypothetical, based on similar models)
-// Prices are per 1,000,000 tokens
+// Prices are per 1,000,000 tokenss
 export const COST_PER_MILLION_TOKENS = {
   INPUT: 0.35,
   OUTPUT: 0.70,
@@ -26,41 +26,6 @@ export const COST_PER_MILLION_TOKENS = {
 // Default system instruction for the assistant behavior
 // Threshold to suggest summarizing long chats (soft UI threshold)
 export const SUMMARY_THRESHOLD = 50000; // tokens
-
-// Dinamik özetleme için eşikler ve prompt'lar
-export const SUMMARY_CHUNK_THRESHOLD = 120000; // Her bir sohbet parçasının maksimum token boyutu (yaklaşık 30k kelime)
-export const SUMMARY_RECURSION_THRESHOLD = 250000; // Parçalı özetlemeyi tetikleyecek toplam sohbet token eşiği (yaklaşık 62.5k kelime)
-
-export const DEFAULT_CHUNK_SUMMARY_PROMPT = `Aşağıdaki sohbet geçmişi parçasını ana tartışma noktalarını, kritik kararları, ortaya çıkan sorunları ve çözümleri kaybetmeden özetle.
-Odaklan: teknik konulara, kod tartışmalarına, proje gereksinimlerine.
-Maddeler halinde, net ve eyleme dönük bir özet oluştur.
-Özetin başında "Bu parça özeti:" gibi bir ifade kullan.
-
-Sohbet Parçası:
-"""
-{TRANSCRIPT_CHUNK}
-"""
-
-Özet:
-`;
-
-export const DEFAULT_FINAL_SUMMARY_PROMPT = `Aşağıdaki bir dizi ara özet, büyük bir sohbet geçmişinin farklı bölümlerini özetlemektedir. Bu ara özetleri birleştirerek, tüm sohbetin nihai ve kapsamlı bir özetini oluştur.
-
-İstekler:
-- Türkçe yaz.
-- Tüm sohbetin genel akışını, ana temalarını ve zaman içindeki gelişimini koru.
-- Başlangıçtan sona kadar olan ana teknik kararları, açık soruları, çözülen veya çözülmesi gereken sorunları ve bir sonraki adımları vurgula.
-- 6-12 maddeden oluşan, net ve başlık/alt başlıklarla düzenli bir nihai özet oluştur.
-- Gerektiğinde kod bloklarıyla çok kısa örnek ver; gereksiz ayrıntıya girme.
-- Kullanıcıya gösterilecek SYSTEM mesajı şeklinde, kısa bir giriş cümlesiyle başla (örn. "Önceki sohbetin özetlenmiş ve devam bağlamı") ve ardından maddeleri listele.
-
-Ara Özetler:
-"""
-{CHUNK_SUMMARIES}
-"""
-
-Nihai Özet:
-`;
 
 // Default system instruction for the assistant behavior
 export const DEFAULT_SYSTEM_INSTRUCTION = `

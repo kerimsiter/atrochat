@@ -104,7 +104,6 @@ const App: React.FC = () => {
     activeSessionId,
     isLoading,
     isSummarizing,
-    summarizingStage,
     isSyncing,
     isHydrating,
     sendMessage,
@@ -178,21 +177,6 @@ const App: React.FC = () => {
       setIsRepoLoading(false);
     }
   };
-
-  // Özetleme düğmesi metnini dinamik olarak belirle
-  const summaryButtonText = useMemo(() => {
-    if (!isSummarizing) return 'Özetleyerek yeni sohbete devam et';
-    switch (summarizingStage) {
-      case 'initial':
-        return 'Özetleniyor (Token hesabı)...';
-      case 'chunking':
-        return 'Özetleniyor (Parçalar işleniyor)...';
-      case 'finalizing':
-        return 'Özetleniyor (Nihai özet oluşturuluyor)...';
-      default:
-        return 'Özetleniyor…';
-    }
-  }, [isSummarizing, summarizingStage]);
 
   const renderWelcomeScreen = () => (
     <div className="flex flex-col items-center justify-center h-full text-center p-8">
@@ -306,7 +290,7 @@ const App: React.FC = () => {
                   disabled={isSummarizing}
                   className="ml-4 bg-accent-darker hover:bg-accent-dark text-primary font-semibold px-3 py-1.5 rounded disabled:bg-surface-lighter disabled:cursor-not-allowed transition-colors"
                 >
-                  {summaryButtonText}
+                  {isSummarizing ? 'Özetleniyor…' : 'Özetleyerek yeni sohbete devam et'}
                 </button>
               </div>
             )}

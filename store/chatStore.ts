@@ -3,7 +3,7 @@ import { ChatSession, Message, Role, FileContent, UrlContextMetadata, Attachment
 import { getGeminiChatStream, generateSingleResponse, countTokens } from '../services/geminiService';
 import { parseFigmaUrl, getFigmaFile, summarizeFigmaFile, getFigmaNode, getFigmaImages, summarizeFigmaNode } from '../services/figmaService';
 import { syncRepoChanges } from '../services/githubService';
-import { TOKEN_ESTIMATE_FACTOR, COST_PER_MILLION_TOKENS, DEFAULT_SYSTEM_INSTRUCTION, CONTEXT_WINDOW_LIMIT, SUMMARY_CHUNK_THRESHOLD, SUMMARY_RECURSION_THRESHOLD, DEFAULT_CHUNK_SUMMARY_PROMPT, DEFAULT_FINAL_SUMMARY_PROMPT } from '../constants';
+import { TOKEN_ESTIMATE_FACTOR, COST_PER_MILLION_TOKENS, DEFAULT_SYSTEM_INSTRUCTION, CONTEXT_WINDOW_LIMIT } from '../constants';
 import type { Content, Part } from '@google/genai';
 import Dexie from 'dexie';
 
@@ -34,7 +34,6 @@ interface ChatState {
   isSyncing: boolean;
   isGeneratingInstruction: boolean;
   isSummarizing: boolean;
-  summarizingStage: 'initial' | 'chunking' | 'finalizing' | null;
   geminiApiKey: string;
   githubToken: string;
   figmaToken: string;
@@ -51,7 +50,6 @@ interface ChatActions {
   setSystemInstruction: (instruction: string) => void;
   generateSystemInstruction: () => Promise<void>;
   summarizeAndContinueChat: () => Promise<void>;
-  setSummarizingStage: (stage: 'initial' | 'chunking' | 'finalizing' | null) => void;
   startNewChat: () => void;
   selectChat: (sessionId: string) => void;
   deleteChat: (sessionId: string) => void;
@@ -93,7 +91,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   isSyncing: false,
   isGeneratingInstruction: false,
   isSummarizing: false,
-  summarizingStage: null,
   // Prefer localStorage; fallback to build-time env injected via Vite define
   geminiApiKey: localStorage.getItem('geminiApiKey')
     || ((process as any)?.env?.GEMINI_API_KEY || ''),
@@ -133,138 +130,51 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
 
-  setSummarizingStage: (stage) => set({ summarizingStage: stage }),
-
   summarizeAndContinueChat: async () => {
-    const {
-      activeSessionId,
-      sessions,
-      geminiApiKey,
-      selectedModel,
-      setSummarizingStage,
-    } = get();
+    const { activeSessionId, sessions, geminiApiKey, selectedModel } = get();
     if (!activeSessionId) return;
-    const current = sessions.find((s) => s.id === activeSessionId);
+    const current = sessions.find(s => s.id === activeSessionId);
     if (!current) return;
-
     if (!geminiApiKey) {
       const errorMessage: Message = {
         id: `msg-${Date.now()}`,
         role: Role.SYSTEM,
-        content: 'Özetleme için Gemini API anahtarı gerekli. Lütfen Ayarlar\'dan ekleyin.',
+        content: 'Özetleme için Gemini API anahtarı gerekli. Lütfen Ayarlar’dan ekleyin.',
         timestamp: new Date().toISOString(),
       };
-      set({
-        sessions: sessions.map((s) =>
-          s.id === activeSessionId ? { ...s, messages: [...s.messages, errorMessage] } : s
-        ),
-      });
+      set({ sessions: sessions.map(s => s.id === activeSessionId ? { ...s, messages: [...s.messages, errorMessage] } : s) });
       return;
     }
-
-    set({ isSummarizing: true, summarizingStage: 'initial' });
-
+    set({ isSummarizing: true });
     try {
-      const messagesForSummary = current.messages.filter(
-        (m) => m.role === Role.USER || m.role === Role.MODEL
-      );
+      // 1) Sohbeti transkripte çevir (yalnızca USER/MODEL)
+      const transcript = current.messages
+        .filter(m => m.role === Role.USER || m.role === Role.MODEL)
+        .map(m => `${m.role === Role.USER ? 'Kullanıcı' : 'Asistan'}: ${((m as any).apiContent || m.content).trim()}`)
+        .join('\n');
 
-      if (messagesForSummary.length === 0) {
-          const errorMessage: Message = {
-              id: `msg-${Date.now()}`,
-              role: Role.SYSTEM,
-              content: 'Özetlenecek sohbet geçmişi bulunmuyor.',
-              timestamp: new Date().toISOString(),
-          };
-          set({ sessions: sessions.map(s => s.id === activeSessionId ? { ...s, messages: [...s.messages, errorMessage] } : s) });
-          return;
-      }
-
-      // Sohbet geçmişini API'ye gönderilecek formata çevir
-      const fullTranscriptParts = messagesForSummary.map((m) => ({
-        text: `${m.role === Role.USER ? 'Kullanıcı' : 'Asistan'}: ${
-          ((m as any).apiContent || m.content).trim()
-        }`,
-        tokenCount: estimateTokens(((m as any).apiContent || m.content).trim()),
-      }));
-
-      const totalTranscriptTokens = fullTranscriptParts.reduce(
-        (acc, part) => acc + part.tokenCount,
-        0
-      );
-
-      let finalSummaryText = '';
-
-      if (totalTranscriptTokens > SUMMARY_RECURSION_THRESHOLD) {
-        setSummarizingStage('chunking');
-        console.log(`Toplam token (${totalTranscriptTokens}) özyinelemeli özetleme eşiğini (${SUMMARY_RECURSION_THRESHOLD}) aştı. Parçalı özetlemeye geçiliyor.`);
-
-        const chunkSummaries: string[] = [];
-        let currentChunk = '';
-        let currentChunkTokens = 0;
-        let chunkIndex = 0;
-
-        for (const part of fullTranscriptParts) {
-          if (currentChunkTokens + part.tokenCount > SUMMARY_CHUNK_THRESHOLD && currentChunkTokens > 0) {
-            console.log(`Parça ${chunkIndex + 1} özetleniyor... (Token: ${currentChunkTokens})`);
-            const chunkPrompt = DEFAULT_CHUNK_SUMMARY_PROMPT.replace('{TRANSCRIPT_CHUNK}', currentChunk);
-            const chunkSummary = await generateSingleResponse(geminiApiKey, chunkPrompt, selectedModel);
-            if (chunkSummary) {
-              chunkSummaries.push(chunkSummary);
-            }
-            currentChunk = '';
-            currentChunkTokens = 0;
-            chunkIndex++;
-          }
-          currentChunk += part.text + '\n';
-          currentChunkTokens += part.tokenCount;
-        }
-
-        // Son kalan parçayı özetle
-        if (currentChunkTokens > 0) {
-          console.log(`Son parça ${chunkIndex + 1} özetleniyor... (Token: ${currentChunkTokens})`);
-          const chunkPrompt = DEFAULT_CHUNK_SUMMARY_PROMPT.replace('{TRANSCRIPT_CHUNK}', currentChunk);
-          const chunkSummary = await generateSingleResponse(geminiApiKey, chunkPrompt, selectedModel);
-          if (chunkSummary) {
-            chunkSummaries.push(chunkSummary);
-          }
-        }
-        
-        if (chunkSummaries.length === 0) {
-          throw new Error('Hiçbir sohbet parçası özetlenemedi.');
-        }
-
-        console.log(`Toplam ${chunkSummaries.length} ara özet toplandı. Nihai özet oluşturuluyor.`);
-        setSummarizingStage('finalizing');
-
-        const combinedChunkSummaries = chunkSummaries.join('\n\n---\n\n');
-        const finalPrompt = DEFAULT_FINAL_SUMMARY_PROMPT.replace('{CHUNK_SUMMARIES}', combinedChunkSummaries);
-        finalSummaryText = (await generateSingleResponse(geminiApiKey, finalPrompt, selectedModel)).trim();
-        
-      } else {
-        // Tek parçalı özetleme (eski mantık, prompt güncellendi)
-        console.log(`Toplam token (${totalTranscriptTokens}) tek parçalı özetleme eşiğinin (${SUMMARY_RECURSION_THRESHOLD}) altında. Tek parçalı özetlemeye devam ediliyor.`);
-        const prompt = `Aşağıdaki uzun sohbet geçmişini, mevcut teknik konu ve alınan kararları kaybetmeden, ancak gereksiz ayrıntıya girmeden bir özete dönüştür.
+      // 2) Özetleme prompt'u
+      const prompt = `Aşağıdaki uzun sohbet geçmişini, mevcut teknik konu ve alınan kararları kaybetmeden kısa ve eyleme dönük bir özete dönüştür.
 
 İstekler:
 - Türkçe yaz.
-- Ana teknik tartışmaları, alınan kararları, açık soruları ve bir sonraki adımları mutlaka vurgula.
-- Özetin uzunluğunu, sohbetin karmaşıklığına ve uzunluğuna göre ayarla, ancak net ve eyleme dönük kal.
-- Kod örneklerini (uygun dil etiketiyle) sadece ana değişiklikleri veya kritik noktaları göstermek için çok kısa bir şekilde kullan.
-- Sohbetin genel akışını ve ana konularını koru.
+- 6-12 madde arasında, net ve başlık/alt başlıklarla düzenli bir özet oluştur.
+- Son konuşulan konu, açık kalan sorular, alınmış kararlar ve bir sonraki adımlar mutlaka yer alsın.
+- Gerekirse kod bloklarıyla çok kısa örnek ver; gereksiz ayrıntıya girme.
 
 Sohbet Geçmişi (özetle):
 """
-${fullTranscriptParts.map(p => p.text).join('\n')}
+${transcript}
 """
 
 Çıktı:
-- Sadece özet metnini döndür. Kullanıcıya gösterilecek SYSTEM mesajı şeklinde, kısa bir giriş cümlesiyle başla (örn. "Önceki sohbetin özetlenmiş ve devam bağlamı") ve ardından maddeleri listele.`;
+- Sadece özet metnini döndür. Kullanıcıya gösterilecek SYSTEM mesajı şeklinde, kısa bir giriş cümlesiyle başla (örn. "Önceki sohbetin özeti ve devam bağlamı") ve ardından maddeleri listele.`;
 
-        finalSummaryText = (await generateSingleResponse(geminiApiKey, prompt, selectedModel)).trim();
-      }
+      // 3) Model çağrısı
+      const summary = await generateSingleResponse(geminiApiKey, prompt, selectedModel);
+      const summaryText = (summary || '').trim();
 
-      // Yeni oturum oluştur ve bağlamı taşı
+      // 4) Yeni oturum oluştur ve bağlamı taşı
       const newSession = createInitialSession();
       newSession.title = (current.title || 'Sohbet') + ' (Devamı)';
       newSession.projectFiles = current.projectFiles ? [...current.projectFiles] : [];
@@ -273,35 +183,28 @@ ${fullTranscriptParts.map(p => p.text).join('\n')}
       (newSession as any).projectCommitSha = (current as any).projectCommitSha;
       newSession.isContextStale = true; // İlk mesajla proje bağlamını yeniden taşıyabilmek için
 
-      // Özeti yeni oturuma SYSTEM mesajı olarak ekle
+      // 5) Özeti yeni oturuma SYSTEM mesajı olarak ekle
       const systemSummary: Message = {
         id: `msg-${Date.now()}`,
         role: Role.SYSTEM,
-        content: finalSummaryText.length > 0
-          ? finalSummaryText
-          : 'Özet oluşturulamadı. Mevcut sohbetten devam edebilirsiniz.',
+        content: summaryText.length > 0 ? summaryText : 'Özet oluşturulamadı. Mevcut sohbetten devam edebilirsiniz.',
         timestamp: new Date().toISOString(),
       };
       newSession.messages = [systemSummary];
 
-      // State güncelle
+      // 6) State güncelle
       set((state) => ({ sessions: [newSession, ...state.sessions], activeSessionId: newSession.id }));
-
     } catch (error) {
       console.error('Özetleme hatası:', error);
       const errorMessage: Message = {
         id: `msg-${Date.now()}`,
         role: Role.SYSTEM,
-        content: `Sohbet özetlenirken bir hata oluştu: ${error instanceof Error ? error.message : 'Bilinmeyen hata'}`,
+        content: 'Sohbet özetlenirken bir hata oluştu.',
         timestamp: new Date().toISOString(),
       };
-      set({
-        sessions: get().sessions.map((s) =>
-          s.id === activeSessionId ? { ...s, messages: [...s.messages, errorMessage] } : s
-        ),
-      });
+      set({ sessions: get().sessions.map(s => s.id === activeSessionId ? { ...s, messages: [...s.messages, errorMessage] } : s) });
     } finally {
-      set({ isSummarizing: false, summarizingStage: null });
+      set({ isSummarizing: false });
     }
   },
 
